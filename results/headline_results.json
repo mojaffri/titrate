@@ -1,0 +1,78 @@
+{
+  "bo_constrained": {
+    "median_experiments_to_90pct": 7.0,
+    "median_experiments_to_95pct": 8.0,
+    "median_experiments_to_99pct": 17.0,
+    "median_final_best_feasible_yield": 0.8864523775295319,
+    "constraint_violation_rate": 0.363,
+    "mean_wall_clock_seconds_per_trial": 5.547083872556686,
+    "n_seeds_reached_90pct": 40,
+    "n_seeds": 40
+  },
+  "bo_unconstrained": {
+    "median_experiments_to_90pct": 8.0,
+    "median_experiments_to_95pct": 12.5,
+    "median_experiments_to_99pct": 19.0,
+    "median_final_best_feasible_yield": 0.8523012068831237,
+    "constraint_violation_rate": 0.833,
+    "mean_wall_clock_seconds_per_trial": 3.630977785587311,
+    "n_seeds_reached_90pct": 33,
+    "n_seeds": 40
+  },
+  "grid": {
+    "median_experiments_to_90pct": NaN,
+    "median_experiments_to_95pct": NaN,
+    "median_experiments_to_99pct": NaN,
+    "median_final_best_feasible_yield": 0.7947359888453608,
+    "constraint_violation_rate": 0.556,
+    "mean_wall_clock_seconds_per_trial": 0.00010089874267578125,
+    "n_seeds_reached_90pct": 0,
+    "n_seeds": 40
+  },
+  "lhs": {
+    "median_experiments_to_90pct": 8.0,
+    "median_experiments_to_95pct": 10.0,
+    "median_experiments_to_99pct": NaN,
+    "median_final_best_feasible_yield": 0.8332374295873394,
+    "constraint_violation_rate": 0.73,
+    "mean_wall_clock_seconds_per_trial": 0.0001731991767883301,
+    "n_seeds_reached_90pct": 33,
+    "n_seeds": 40
+  },
+  "random": {
+    "median_experiments_to_90pct": 10.0,
+    "median_experiments_to_95pct": 14.0,
+    "median_experiments_to_99pct": NaN,
+    "median_final_best_feasible_yield": 0.8479193187979421,
+    "constraint_violation_rate": 0.729,
+    "mean_wall_clock_seconds_per_trial": 4.026889801025391e-05,
+    "n_seeds_reached_90pct": 38,
+    "n_seeds": 40
+  },
+  "gp_calibration": {
+    "0.5": 0.5133333333333333,
+    "0.8": 0.8266666666666667,
+    "0.9": 0.9166666666666666,
+    "0.95": 0.95
+  },
+  "true_optimum": {
+    "yield": 0.8896035418207294,
+    "x": [
+      342.01269373243997,
+      4.99999999960605,
+      1.999999999952299
+    ],
+    "dimension_names": [
+      "temperature_K",
+      "residence_time_hr",
+      "catalyst_loading_mol_pct"
+    ],
+    "impurity_at_optimum": 0.04999999999985763,
+    "impurity_max": 0.05
+  },
+  "benchmark_config": {
+    "budget": 25,
+    "n_seeds": 40,
+    "bo_n_initial": 5
+  }
+}
