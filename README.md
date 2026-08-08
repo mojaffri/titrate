@@ -2,7 +2,7 @@
 
 **Constrained Bayesian optimization for chemical process design — how many experiments does it actually take to find a near-optimal reaction condition?**
 
-**[Live demo (deploying — link goes here shortly)](#14-demo)** — until then, run it in 2 commands: `pip install -r requirements.txt && streamlit run webapp/app.py`. See [§14](#14-demo).
+**[🔗 Live demo — titrate.streamlit.app](https://titrate.streamlit.app/)** — interactive: swap between the physics simulator and real reaction data, adjust engineering constraints, or upload your own CSV. See [§14](#14-demo).
 
 Titrate is an open-source benchmark and optimization engine for the small-data experiment-design problem at the core of AI-native chemistry/process-R&D companies: given a limited number of experiments, which condition should you run next to reach the best (feasible) outcome as fast as possible? It implements Gaussian-process-based constrained Bayesian optimization from scratch on top of a physically grounded chemical reactor model, and rigorously benchmarks it against random search, grid search, and Latin Hypercube Sampling across 40 random seeds — then validates the same method on a real published chemistry dataset (see [§9](#9-real-data-validation)).
 
@@ -228,11 +228,17 @@ The `ExperimentEnvironment` abstraction ([`titrate/environments/base.py`](src/ti
 
 ## 14. Demo
 
-A live, working Streamlit app — not a mockup. It runs the real `titrate` package: same physics simulator, same GP surrogate, same from-scratch constrained-EI acquisition as the benchmark above. Each click of "Run this experiment" fits fresh GPs on whatever data exists so far, picks the next point by maximizing constrained EI, queries the (noisy) simulator, and updates every panel.
+**[titrate.streamlit.app](https://titrate.streamlit.app/)** — a live, working app, not a mockup. It runs the real `titrate` package: same GP surrogate, same from-scratch constrained-EI acquisition as the benchmark above. Each click of "Run this experiment" fits fresh GPs on whatever data exists so far, picks the next point by maximizing constrained EI, queries the environment, and updates every panel.
+
+Three data sources, one underlying code path -- the actual point of the `ExperimentEnvironment` abstraction (§13), demonstrated live rather than just asserted:
+
+- **Synthetic CSTR simulator**, with the engineering constraints (max temperature, residence time, catalyst loading, impurity spec) adjustable via sliders in the sidebar -- watch the recommended experiment and the true optimum shift as the constraints change.
+- **Real Suzuki-Miyaura data** (§9) -- the same emulator used in the real-data validation.
+- **Upload your own CSV** -- pick which numeric columns are decision variables, which one to maximize, and optionally a constraint column. A GP emulator is fit on the spot and the identical optimization engine runs on it. A column named something like `yield` or `conversion` is auto-detected as the default objective; anything can be overridden in the sidebar.
 
 ![Titrate optimizer converging over 25 experiments](assets/demo.gif)
 
-*One real constrained-BO run (seed 3, budget 25) — not staged. Left: the GP's predicted yield landscape and the constraint boundary (red dashed) updating as points land; right: best-feasible-yield-so-far converging toward the true optimum (black dotted line). Regenerate with `python experiments/make_demo_gif.py`.*
+*One real constrained-BO run on the CSTR simulator (seed 3, budget 25) — not staged. Left: the GP's predicted yield landscape and the constraint boundary (red dashed) updating as points land; right: best-feasible-yield-so-far converging toward the true optimum (black dotted line). Regenerate with `python experiments/make_demo_gif.py`.*
 
 **Run it locally:**
 
@@ -241,7 +247,7 @@ pip install -r requirements.txt
 streamlit run webapp/app.py
 ```
 
-What it shows: current best observed yield, experiments performed, model uncertainty at the recommended point, the engineering constraints, the recommended next experiment with its expected improvement, a table of all experiments run, a GP prediction slice (with the ground-truth curve for comparison), a 2D predicted-yield landscape with the constraint GP's feasibility boundary overlaid, and this session's convergence plotted against the precomputed 40-seed benchmark medians from `results/benchmark_trials.csv`.
+Every panel shown: current best observed value, experiments performed, model uncertainty at the recommended point, the search domain and constraints, the recommended next experiment with its expected improvement, a table of all experiments run, a GP prediction slice (with the environment's own noiseless function for comparison), a 2D predicted-value landscape with the constraint GP's feasibility boundary overlaid (when a constraint is present), and this session's convergence -- benchmarked against the precomputed 40-seed medians from `results/benchmark_trials.csv` when running the CSTR simulator.
 
 ## 15. Future work
 
