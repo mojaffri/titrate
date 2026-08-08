@@ -1,0 +1,61 @@
+{
+  "bo_constrained": {
+    "median_experiments_to_90pct": 8.0,
+    "median_experiments_to_95pct": 9.0,
+    "median_final_best_feasible_yield": 0.9425197610110523,
+    "n_seeds_reached_90pct": 30,
+    "n_seeds": 30
+  },
+  "bo_unconstrained": {
+    "median_experiments_to_90pct": 8.0,
+    "median_experiments_to_95pct": 9.0,
+    "median_final_best_feasible_yield": 0.9425197610110523,
+    "n_seeds_reached_90pct": 30,
+    "n_seeds": 30
+  },
+  "grid": {
+    "median_experiments_to_90pct": 6.5,
+    "median_experiments_to_95pct": 11.0,
+    "median_final_best_feasible_yield": 0.9344191735131802,
+    "n_seeds_reached_90pct": 30,
+    "n_seeds": 30
+  },
+  "lhs": {
+    "median_experiments_to_90pct": 3.5,
+    "median_experiments_to_95pct": 10.0,
+    "median_final_best_feasible_yield": 0.8627550834039978,
+    "n_seeds_reached_90pct": 10,
+    "n_seeds": 30
+  },
+  "random": {
+    "median_experiments_to_90pct": 8.0,
+    "median_experiments_to_95pct": 9.0,
+    "median_final_best_feasible_yield": 0.8753409152077302,
+    "n_seeds_reached_90pct": 15,
+    "n_seeds": 30
+  },
+  "emulator": {
+    "n_real_experiments": 37,
+    "catalyst": "P1-L4",
+    "holdout_rmse": 0.10738044923588537,
+    "source": "Reizman et al., React. Chem. Eng. 2016, 1, 658-666"
+  },
+  "true_optimum": {
+    "yield": 0.968329105521357,
+    "x": [
+      394.08582539053134,
+      109.99999999998859,
+      1.9646735004418812
+    ],
+    "dimension_names": [
+      "residence_time_s",
+      "temperature_C",
+      "catalyst_loading_mol_pct"
+    ]
+  },
+  "benchmark_config": {
+    "budget": 20,
+    "n_seeds": 30,
+    "bo_n_initial": 5
+  }
+}
