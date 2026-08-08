@@ -2,7 +2,7 @@
 
 **Constrained Bayesian optimization for chemical process design — how many experiments does it actually take to find a near-optimal reaction condition?**
 
-**[Live demo (deploying — link goes here shortly)](#13-demo)** — until then, run it in 2 commands: `pip install -r requirements.txt && streamlit run webapp/app.py`. See [§13](#13-demo).
+**[Live demo (deploying — link goes here shortly)](#14-demo)** — until then, run it in 2 commands: `pip install -r requirements.txt && streamlit run webapp/app.py`. See [§14](#14-demo).
 
 Titrate is an open-source benchmark and optimization engine for the small-data experiment-design problem at the core of AI-native chemistry/process-R&D companies: given a limited number of experiments, which condition should you run next to reach the best (feasible) outcome as fast as possible? It implements Gaussian-process-based constrained Bayesian optimization from scratch on top of a physically grounded chemical reactor model, and rigorously benchmarks it against random search, grid search, and Latin Hypercube Sampling across 40 random seeds — then validates the same method on a real published chemistry dataset (see [§9](#9-real-data-validation)).
 
