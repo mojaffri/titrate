@@ -177,6 +177,7 @@ src/titrate/
 ├── baselines/         # Random search, grid search, Latin Hypercube Sampling
 └── evaluation/         # Multi-seed benchmark harness, metrics, plotting
 experiments/run_benchmark.py   # regenerates results/ from scratch
+webapp/app.py                   # interactive Streamlit demo (see below)
 tests/                          # 63 tests, mirrors src/ layout
 results/                        # committed benchmark outputs + figures
 ```
@@ -185,12 +186,21 @@ The `ExperimentEnvironment` abstraction ([`titrate/environments/base.py`](src/ti
 
 ## 13. Demo
 
-Not yet built. A Streamlit demo (current best yield, model uncertainty, recommended next experiment, optimization-landscape visualization) is planned as the next step — see [Future work](#14-future-work). The scientific core above works and is fully tested without it.
+A live, working Streamlit app — not a mockup. It runs the real `titrate` package: same physics simulator, same GP surrogate, same from-scratch constrained-EI acquisition as the benchmark above. Each click of "Run this experiment" fits fresh GPs on whatever data exists so far, picks the next point by maximizing constrained EI, queries the (noisy) simulator, and updates every panel.
+
+**Run it locally:**
+
+```bash
+pip install -r requirements.txt
+streamlit run webapp/app.py
+```
+
+What it shows: current best observed yield, experiments performed, model uncertainty at the recommended point, the engineering constraints, the recommended next experiment with its expected improvement, a table of all experiments run, a GP prediction slice (with the ground-truth curve for comparison), a 2D predicted-yield landscape with the constraint GP's feasibility boundary overlaid, and this session's convergence plotted against the precomputed 40-seed benchmark medians from `results/benchmark_trials.csv`.
 
 ## 14. Future work
 
 - Validate against a real published HTE (high-throughput experimentation) reaction-yield dataset from the BO-for-chemistry literature, behind the same `ExperimentEnvironment` interface.
-- Interactive Streamlit/web demo visualizing the surrogate, uncertainty, optimization landscape, and recommended next experiment.
+- Deploy the Streamlit demo publicly (e.g. Streamlit Community Cloud) for a shareable link.
 - Batch/parallel acquisition (e.g. via BoTorch) for settings where several experiments can run simultaneously.
 - Multi-objective optimization (yield vs. cost vs. safety).
 - A thin natural-language interface layer (parse an objective/constraint statement into the structured optimization spec above) — kept strictly as an interface on top of the existing scientific core, never a replacement for it.

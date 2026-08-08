@@ -14,6 +14,10 @@ Algorithm, at each iteration:
 
 The first `n_initial` points come from a Latin Hypercube bootstrap (BO needs
 some data before a GP fit is meaningful).
+
+Steps 1-3 are exposed separately as `recommend_next_point` so a caller (e.g.
+the web demo) can show "here's what we'd run next and why" before actually
+spending an experiment on it.
 """
 
 from __future__ import annotations
@@ -39,12 +43,22 @@ class BOResult:
     constraints: np.ndarray  # noisy observed constraint value at each point
 
 
-def _maximize_acquisition(
+@dataclass
+class Recommendation:
+    x: np.ndarray  # the proposed next experiment
+    acquisition_value: float  # (constrained) EI at x -- "expected improvement"
+    y_best: float  # best feasible objective the recommendation is measured against
+    gp_objective: GPSurrogate
+    gp_constraint: GPSurrogate | None  # None when use_constraint=False
+
+
+def maximize_acquisition(
     acquisition_fn,
     bounds: np.ndarray,
     rng: np.random.Generator,
     n_restarts: int = 10,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float]:
+    """Multi-start L-BFGS-B maximization of a scalar acquisition_fn(x) over bounds."""
     scipy_bounds = list(zip(bounds[:, 0], bounds[:, 1]))
     best_x = None
     best_value = -np.inf
@@ -60,7 +74,60 @@ def _maximize_acquisition(
         if value > best_value:
             best_value = value
             best_x = result.x
-    return np.clip(best_x, bounds[:, 0], bounds[:, 1])
+    return np.clip(best_x, bounds[:, 0], bounds[:, 1]), best_value
+
+
+def recommend_next_point(
+    env: ExperimentEnvironment,
+    X: np.ndarray,
+    objectives: np.ndarray,
+    constraints: np.ndarray,
+    rng: np.random.Generator,
+    use_constraint: bool = True,
+    xi: float = 0.01,
+    n_acquisition_restarts: int = 10,
+) -> Recommendation:
+    """Fit GP(s) on the current dataset and pick the next point to query,
+    without spending an experiment on it. This is the "what should I run
+    next, and why" step, reused by both run_bo and the live demo."""
+    gp_objective = GPSurrogate(env.bounds).fit(X, objectives)
+
+    feasible_mask = constraints <= env.constraint_max
+    if use_constraint and feasible_mask.any():
+        y_best = float(objectives[feasible_mask].max())
+    elif use_constraint:
+        y_best = float(objectives.min())
+    else:
+        y_best = float(objectives.max())
+
+    gp_constraint = None
+    if use_constraint:
+        gp_constraint = GPSurrogate(env.bounds).fit(X, constraints)
+
+        def acquisition(x: np.ndarray) -> float:
+            mean, std = gp_objective.predict(np.atleast_2d(x))
+            c_mean, c_std = gp_constraint.predict(np.atleast_2d(x))
+            value = constrained_expected_improvement(
+                mean, std, y_best, c_mean, c_std, env.constraint_max, xi
+            )
+            return float(value[0])
+    else:
+
+        def acquisition(x: np.ndarray) -> float:
+            mean, std = gp_objective.predict(np.atleast_2d(x))
+            value = expected_improvement(mean, std, y_best, xi)
+            return float(value[0])
+
+    x_next, acquisition_value = maximize_acquisition(
+        acquisition, env.bounds, rng, n_acquisition_restarts
+    )
+    return Recommendation(
+        x=x_next,
+        acquisition_value=acquisition_value,
+        y_best=y_best,
+        gp_objective=gp_objective,
+        gp_constraint=gp_constraint,
+    )
 
 
 def run_bo(
@@ -76,37 +143,12 @@ def run_bo(
     X, objectives, constraints = _bootstrap(env, n_initial, rng)
 
     for _ in range(n_iterations):
-        gp_objective = GPSurrogate(env.bounds).fit(X, objectives)
+        recommendation = recommend_next_point(
+            env, X, objectives, constraints, rng, use_constraint, xi, n_acquisition_restarts
+        )
+        result = env.evaluate(recommendation.x, rng)
 
-        feasible_mask = constraints <= env.constraint_max
-        if use_constraint and feasible_mask.any():
-            y_best = float(objectives[feasible_mask].max())
-        elif use_constraint:
-            y_best = float(objectives.min())
-        else:
-            y_best = float(objectives.max())
-
-        if use_constraint:
-            gp_constraint = GPSurrogate(env.bounds).fit(X, constraints)
-
-            def acquisition(x: np.ndarray) -> float:
-                mean, std = gp_objective.predict(np.atleast_2d(x))
-                c_mean, c_std = gp_constraint.predict(np.atleast_2d(x))
-                value = constrained_expected_improvement(
-                    mean, std, y_best, c_mean, c_std, env.constraint_max, xi
-                )
-                return float(value[0])
-        else:
-
-            def acquisition(x: np.ndarray) -> float:
-                mean, std = gp_objective.predict(np.atleast_2d(x))
-                value = expected_improvement(mean, std, y_best, xi)
-                return float(value[0])
-
-        x_next = _maximize_acquisition(acquisition, env.bounds, rng, n_acquisition_restarts)
-        result = env.evaluate(x_next, rng)
-
-        X = np.vstack([X, x_next])
+        X = np.vstack([X, recommendation.x])
         objectives = np.append(objectives, result.objective)
         constraints = np.append(constraints, result.constraint_value)
 
