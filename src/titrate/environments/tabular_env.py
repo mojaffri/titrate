@@ -138,4 +138,3 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
             "mae": float(mean_absolute_error(observed_array, predicted_array)),
             "r2": float(r2_score(observed_array, predicted_array)),
         }
-
