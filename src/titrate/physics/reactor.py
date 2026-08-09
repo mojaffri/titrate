@@ -98,4 +98,3 @@ def cstr_yield(
         yield_=float(yield_),
         impurity=float(impurity),
     )
-
