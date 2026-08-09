@@ -47,7 +47,7 @@ DIM_LABEL_PRESETS = {
     "residence_time_hr": "Residence time (hr)",
     "catalyst_loading_mol_pct": "Catalyst loading (mol%)",
     "residence_time_s": "Residence time (s)",
-    "temperature_C": "Temperature (Â°C)",
+    "temperature_C": "Temperature (°C)",
 }
 
 
@@ -195,7 +195,7 @@ def sidebar_pick_environment() -> tuple[ExperimentEnvironment, DisplayConfig, tu
         st.sidebar.info(
             "96 real automated flow-chemistry experiments. A GP emulator is fit on the 37 runs with the "
             "most-sampled catalyst. No purity/engineering constraint is recorded in this dataset, so "
-            "constrained and unconstrained BO behave identically here â€” see the README's real-data validation "
+            "constrained and unconstrained BO behave identically here — see the README's real-data validation "
             "section for why."
         )
         env = load_reizman_environment()
@@ -218,7 +218,7 @@ def sidebar_pick_environment() -> tuple[ExperimentEnvironment, DisplayConfig, tu
     uploaded = st.sidebar.file_uploader("CSV file", type="csv")
     if uploaded is None:
         st.info(
-            "â¬†ï¸ Upload a CSV in the sidebar to try Titrate on your own data â€” e.g. any small "
+            "⬆️ Upload a CSV in the sidebar to try Titrate on your own data — e.g. any small "
             "design-of-experiments table with a few numeric input columns and a result you want to maximize."
         )
         st.stop()
@@ -232,7 +232,7 @@ def sidebar_pick_environment() -> tuple[ExperimentEnvironment, DisplayConfig, tu
 
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     if len(numeric_cols) < 2:
-        st.error("Need at least 2 numeric columns in the CSV (â‰¥1 input + 1 objective).")
+        st.error("Need at least 2 numeric columns in the CSV (≥1 input + 1 objective).")
         st.stop()
 
     guessed_objective = _guess_objective_column(numeric_cols)
@@ -304,7 +304,7 @@ def sidebar_pick_environment() -> tuple[ExperimentEnvironment, DisplayConfig, tu
     diagnostics = env.emulator_cross_validation()
     st.caption(
         f"Cross-validated emulator fit: RMSE {diagnostics['rmse']:.3g}, "
-        f"MAE {diagnostics['mae']:.3g}, RÂ² {diagnostics['r2']:.2f}. "
+        f"MAE {diagnostics['mae']:.3g}, R² {diagnostics['r2']:.2f}. "
         "These describe the fitted proxy, not experimental measurement noise."
     )
     config_key = (
@@ -354,7 +354,7 @@ def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -
     st.title("\U0001f9ea Titrate")
     st.markdown("### Reach better experimental conditions with fewer runs")
     st.caption(
-        "Constrained Bayesian optimization for chemical process design â€” interactive: swap data sources, "
+        "Constrained Bayesian optimization for chemical process design — interactive: swap data sources, "
         "adjust constraints, or upload your own CSV in the sidebar. "
         "Choose a process, learn from completed experiments, and repeat an uncertainty-aware recommendation. "
         "See the [GitHub repo](https://github.com/mojaffri/titrate) for multi-seed benchmarks and methodology."
@@ -377,17 +377,17 @@ def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -
 def render_constraints(env: ExperimentEnvironment) -> None:
     with st.expander("Search domain & constraints", expanded=False):
         lines = [
-            f"- {pretty_dim_name(name)}: {low:.2f} â€“ {high:.2f}"
+            f"- {pretty_dim_name(name)}: {low:.2f} – {high:.2f}"
             for name, (low, high) in zip(env.dimension_names, env.bounds)
         ]
         if np.isfinite(env.constraint_max):
             lines.append(
-                f"- **{env.constraint_name}** {env.constraint_operator} {env.constraint_max:.3f} â€” a *soft*, nonlinear "
+                f"- **{env.constraint_name}** {env.constraint_operator} {env.constraint_max:.3f} — a *soft*, nonlinear "
                 f"constraint (not a simple bound); this is what makes constrained BO matter."
             )
         else:
             lines.append(
-                "- No engineering constraint recorded for this data source â€” constrained and unconstrained "
+                "- No engineering constraint recorded for this data source — constrained and unconstrained "
                 "BO are mathematically equivalent here."
             )
         st.markdown("\n".join(lines))
@@ -415,17 +415,17 @@ def render_recommendation(env: ExperimentEnvironment, display: DisplayConfig, se
     st.info(
         f"Why this point: it balances {direction} "
         f"({fmt_value(display, recommendation.predicted_mean)}) with model uncertainty "
-        f"(Â±{fmt_magnitude(display, recommendation.predicted_std)}), while the constraint model estimates "
+        f"(±{fmt_magnitude(display, recommendation.predicted_std)}), while the constraint model estimates "
         f"a {recommendation.probability_feasible:.0%} chance of feasibility."
     )
     with st.expander("How this recommendation was computed"):
         st.markdown(
             "Titrate fits Gaussian-process models to the objective and constraint, then maximizes "
-            "**Expected Improvement Ã— Probability of Feasibility**. The uncertainty shown is model "
+            "**Expected Improvement × Probability of Feasibility**. The uncertainty shown is model "
             "uncertainty; it is not claimed to be laboratory measurement error."
         )
 
-    if st.button("â–¶ Run this experiment", type="primary"):
+    if st.button("▶ Run this experiment", type="primary"):
         run_recommended_experiment(env, recommendation.x)
         st.rerun()
 
@@ -584,7 +584,7 @@ def render_convergence(env: ExperimentEnvironment, optimum, display: DisplayConf
     plt.close(fig)
     st.caption(
         "Scored against the noiseless ground-truth function, not the noisy values actually observed during "
-        "the session â€” matching the benchmark methodology in the README."
+        "the session — matching the benchmark methodology in the README."
     )
 
 
@@ -599,7 +599,7 @@ def main() -> None:
     render_header(env, optimum, display)
     render_constraints(env)
 
-    if st.button("â†º Reset session"):
+    if st.button("↺ Reset session"):
         for key in ("env_key", "rng", "X", "objectives", "constraints"):
             st.session_state.pop(key, None)
         st.rerun()
@@ -651,4 +651,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
