@@ -3,10 +3,42 @@ name = "titrate"
 version = "0.1.0"
 description = "Constrained Bayesian optimization for chemical process design"
 requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "pandas>=2.1",
+]
+
+[project.optional-dependencies]
+web = ["matplotlib>=3.8", "streamlit>=1.38"]
+dev = [
+    "matplotlib>=3.8",
+    "streamlit>=1.38",
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pandas-stubs>=2.1",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["titrate"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -14,3 +46,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
