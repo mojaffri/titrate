@@ -68,4 +68,3 @@ class GPSurrogate:
         mean = mean_scaled * self._y_std + self._y_mean
         std = std_scaled * self._y_std
         return mean, std
-
