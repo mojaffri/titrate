@@ -14,6 +14,7 @@ Run with:  streamlit run webapp/app.py
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import sys
@@ -23,6 +24,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 LOGO_PATH = REPO_ROOT / "assets" / "titrate-logo.png"
+LOGO_DATA_URI = "data:image/png;base64," + base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -353,7 +355,10 @@ def run_recommended_experiment(env: ExperimentEnvironment, x_next: np.ndarray) -
 
 def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -> None:
     logo_col, title_col = st.columns([1, 10])
-    logo_col.image(str(LOGO_PATH), width=72)
+    logo_col.markdown(
+        f'<img src="{LOGO_DATA_URI}" alt="Titrate logo" width="72">',
+        unsafe_allow_html=True,
+    )
     title_col.title("Titrate")
     st.markdown("### Reach better experimental conditions with fewer runs")
     st.caption(
