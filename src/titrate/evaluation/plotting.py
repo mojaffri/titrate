@@ -108,4 +108,3 @@ def plot_calibration(empirical_coverage: dict[float, float], save_path: str | Pa
     fig.tight_layout()
     fig.savefig(save_path, dpi=150)
     plt.close(fig)
-
