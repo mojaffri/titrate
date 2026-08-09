@@ -356,7 +356,11 @@ def run_recommended_experiment(env: ExperimentEnvironment, x_next: np.ndarray) -
 def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -> None:
     logo_col, title_col = st.columns([1, 10])
     logo_col.markdown(
-        f'<img src="{LOGO_DATA_URI}" alt="Titrate logo" width="72">',
+        '<div style="width:72px;height:72px;border-radius:18px;background:#f8fafc;'
+        'border:1px solid rgba(148,163,184,.35);display:flex;align-items:center;'
+        'justify-content:center;box-shadow:0 6px 18px rgba(15,23,42,.16)">'
+        f'<img src="{LOGO_DATA_URI}" alt="Titrate logo" width="58" height="58">'
+        '</div>',
         unsafe_allow_html=True,
     )
     title_col.title("Titrate")
