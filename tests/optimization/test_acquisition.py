@@ -98,4 +98,3 @@ def test_constrained_ei_near_zero_when_clearly_infeasible():
         mean, std, y_best, constraint_mean, constraint_std, constraint_max
     )
     assert cei[0] < 1e-6
-
