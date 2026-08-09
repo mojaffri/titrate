@@ -68,4 +68,3 @@ def constrained_expected_improvement(
         constraint_mean, constraint_std, constraint_max, operator=constraint_operator
     )
     return ei * p_feasible
-
