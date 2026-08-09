@@ -108,4 +108,3 @@ class ExperimentEnvironment(ABC):
             constraint_value=best_eval.constraint_value,
         )
         return self._true_optimum_cache
-
