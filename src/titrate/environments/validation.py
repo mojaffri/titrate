@@ -71,4 +71,3 @@ def validate_experiment_table(
         warnings=tuple(warnings),
     )
     return clean, health
-
