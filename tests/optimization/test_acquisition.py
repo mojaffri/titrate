@@ -7,6 +7,20 @@ from titrate.optimization.acquisition import (
 )
 
 
+def test_expected_improvement_supports_minimization() -> None:
+    means = np.array([0.0, 2.0])
+    std = np.array([0.1, 0.1])
+    ei = expected_improvement(means, std, y_best=1.0, xi=0.0, maximize=False)
+    assert ei[0] > ei[1]
+
+
+def test_probability_of_feasibility_supports_lower_bound() -> None:
+    probability = probability_of_feasibility(
+        np.array([8.0]), np.array([1.0]), constraint_max=5.0, operator=">="
+    )
+    assert probability[0] > 0.99
+
+
 def test_ei_is_never_negative():
     mean = np.array([-1.0, 0.0, 0.5, 1.0, 5.0])
     std = np.array([0.1, 0.0, 1.0, 2.0, 0.01])

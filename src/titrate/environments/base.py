@@ -40,6 +40,8 @@ class ExperimentEnvironment(ABC):
     bounds: np.ndarray  # shape (n_dims, 2), rows are (low, high)
     constraint_max: float
     constraint_name: str
+    objective_direction: str = "maximize"
+    constraint_operator: str = "<="
 
     def __init__(self) -> None:
         self._true_optimum_cache: OptimumInfo | None = None
@@ -58,7 +60,19 @@ class ExperimentEnvironment(ABC):
         return len(self.dimension_names)
 
     def is_feasible(self, constraint_value: float) -> bool:
-        return constraint_value <= self.constraint_max
+        if self.constraint_operator == "<=":
+            return constraint_value <= self.constraint_max
+        if self.constraint_operator == ">=":
+            return constraint_value >= self.constraint_max
+        raise ValueError(f"Unsupported constraint operator: {self.constraint_operator}")
+
+    def feasible_mask(self, values: np.ndarray) -> np.ndarray:
+        values = np.asarray(values, dtype=float)
+        return values <= self.constraint_max if self.constraint_operator == "<=" else values >= self.constraint_max
+
+    def objective_score(self, values: np.ndarray | float) -> np.ndarray | float:
+        """Return values on a common higher-is-better scale."""
+        return values if self.objective_direction == "maximize" else -np.asarray(values)
 
     def true_optimum(self) -> OptimumInfo:
         """Global constrained optimum of the noiseless objective, computed once
@@ -68,12 +82,16 @@ class ExperimentEnvironment(ABC):
             return self._true_optimum_cache
 
         def negative_objective(x: np.ndarray) -> float:
-            return -self.evaluate_noiseless(np.asarray(x)).objective
+            value = self.evaluate_noiseless(np.asarray(x)).objective
+            return -float(self.objective_score(value))
 
         def constraint_fn(x: np.ndarray) -> float:
             return self.evaluate_noiseless(np.asarray(x)).constraint_value
 
-        constraint = NonlinearConstraint(constraint_fn, -np.inf, self.constraint_max)
+        if self.constraint_operator == "<=":
+            constraint = NonlinearConstraint(constraint_fn, -np.inf, self.constraint_max)
+        else:
+            constraint = NonlinearConstraint(constraint_fn, self.constraint_max, np.inf)
         result = differential_evolution(
             negative_objective,
             bounds=self.bounds,

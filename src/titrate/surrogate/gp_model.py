@@ -23,6 +23,12 @@ class GPSurrogate:
 
     def __init__(self, bounds: np.ndarray, random_state: int = 0) -> None:
         self.bounds = np.asarray(bounds, dtype=float)
+        if self.bounds.ndim != 2 or self.bounds.shape[1] != 2:
+            raise ValueError("bounds must have shape (n_dimensions, 2).")
+        if not np.isfinite(self.bounds).all():
+            raise ValueError("bounds must contain only finite values.")
+        if np.any(self.bounds[:, 1] <= self.bounds[:, 0]):
+            raise ValueError("Every input dimension must have a non-zero range.")
         n_dims = self.bounds.shape[0]
         kernel = ConstantKernel(1.0, (1e-2, 1e2)) * Matern(
             length_scale=np.ones(n_dims),

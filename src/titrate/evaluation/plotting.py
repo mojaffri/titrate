@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 STRATEGY_LABELS = {
@@ -30,6 +29,7 @@ def plot_convergence(trials: pd.DataFrame, true_optimum: float, save_path: str |
     an inter-quartile shaded band across seeds."""
     fig, ax = plt.subplots(figsize=(7, 5))
     for strategy, group in trials.groupby("strategy"):
+        strategy = str(strategy)
         pivot = group.pivot(index="seed", columns="iteration", values="best_feasible_so_far")
         pivot = pivot.ffill(axis=1)  # NaN before first feasible point -> carry as "no result yet"
         iterations = pivot.columns.to_numpy()
