@@ -23,11 +23,12 @@ def expected_improvement(
     std: np.ndarray,
     y_best: float,
     xi: float = 0.01,
+    maximize: bool = True,
 ) -> np.ndarray:
-    """EI for maximizing an objective, given GP posterior mean/std."""
+    """Expected improvement for either maximizing or minimizing an objective."""
     mean = np.asarray(mean, dtype=float)
     std = np.maximum(np.asarray(std, dtype=float), 1e-9)
-    improvement = mean - y_best - xi
+    improvement = (mean - y_best if maximize else y_best - mean) - xi
     z = improvement / std
     ei = improvement * norm.cdf(z) + std * norm.pdf(z)
     return np.maximum(ei, 0.0)
@@ -37,11 +38,16 @@ def probability_of_feasibility(
     constraint_mean: np.ndarray,
     constraint_std: np.ndarray,
     constraint_max: float,
+    operator: str = "<=",
 ) -> np.ndarray:
-    """P(constraint_value(x) <= constraint_max) under the constraint GP posterior."""
+    """Probability an inequality constraint is satisfied under its GP posterior."""
     constraint_mean = np.asarray(constraint_mean, dtype=float)
     constraint_std = np.maximum(np.asarray(constraint_std, dtype=float), 1e-9)
+    if operator not in {"<=", ">="}:
+        raise ValueError("operator must be '<=' or '>='")
     z = (constraint_max - constraint_mean) / constraint_std
+    if operator == ">=":
+        z = -z
     return norm.cdf(z)
 
 
@@ -53,8 +59,13 @@ def constrained_expected_improvement(
     constraint_std: np.ndarray,
     constraint_max: float,
     xi: float = 0.01,
+    maximize: bool = True,
+    constraint_operator: str = "<=",
 ) -> np.ndarray:
     """EI(x) * P_feasible(x) -- see module docstring."""
-    ei = expected_improvement(mean, std, y_best, xi)
-    p_feasible = probability_of_feasibility(constraint_mean, constraint_std, constraint_max)
+    ei = expected_improvement(mean, std, y_best, xi, maximize=maximize)
+    p_feasible = probability_of_feasibility(
+        constraint_mean, constraint_std, constraint_max, operator=constraint_operator
+    )
     return ei * p_feasible
+
