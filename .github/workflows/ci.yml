@@ -20,4 +20,3 @@ jobs:
       - run: pytest -q
       - name: Streamlit import smoke test
         run: python -m py_compile webapp/app.py
-
