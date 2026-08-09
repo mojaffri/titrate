@@ -216,4 +216,3 @@ def _bootstrap(
         objectives[i] = result.objective
         constraints[i] = result.constraint_value
     return X, objectives, constraints
-
