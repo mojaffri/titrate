@@ -38,4 +38,3 @@ def test_minimize_and_greater_than_constraint_semantics() -> None:
     assert env.is_feasible(5.0)
     assert not env.is_feasible(3.0)
     assert env.objective_score(2.0) > env.objective_score(3.0)
-
