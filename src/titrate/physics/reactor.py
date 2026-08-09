@@ -93,8 +93,9 @@ def cstr_yield(
     impurity = params.feed_concentration * conversion * (1.0 - selectivity)
 
     return ReactorOutput(
-        conversion=conversion,
-        selectivity=selectivity,
-        yield_=yield_,
-        impurity=impurity,
+        conversion=float(conversion),
+        selectivity=float(selectivity),
+        yield_=float(yield_),
+        impurity=float(impurity),
     )
+
