@@ -22,6 +22,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
+LOGO_PATH = REPO_ROOT / "assets" / "titrate-logo.png"
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -37,7 +38,7 @@ from titrate.environments.tabular_env import TabularEmulatorEnvironment  # noqa:
 from titrate.environments.validation import validate_experiment_table  # noqa: E402
 from titrate.optimization.bo_loop import recommend_next_point  # noqa: E402
 
-st.set_page_config(page_title="Titrate", page_icon="\U0001f9ea", layout="wide")
+st.set_page_config(page_title="Titrate", page_icon=str(LOGO_PATH), layout="wide")
 
 N_INITIAL = 5
 MIN_UPLOAD_ROWS = 8
@@ -351,7 +352,9 @@ def run_recommended_experiment(env: ExperimentEnvironment, x_next: np.ndarray) -
 
 
 def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -> None:
-    st.title("\U0001f9ea Titrate")
+    logo_col, title_col = st.columns([1, 10])
+    logo_col.image(str(LOGO_PATH), width=72)
+    title_col.title("Titrate")
     st.markdown("### Reach better experimental conditions with fewer runs")
     st.caption(
         "Constrained Bayesian optimization for chemical process design — interactive: swap data sources, "
