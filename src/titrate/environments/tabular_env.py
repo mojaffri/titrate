@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import KFold
 
 from titrate.environments.base import EvaluationResult, ExperimentEnvironment
+from titrate.environments.validation import validate_experiment_table
 from titrate.surrogate.gp_model import GPSurrogate
 
 
@@ -37,26 +39,38 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
         constraint_max: float = float("inf"),
         clip_range: tuple[float, float] | None = None,
         random_state: int = 0,
+        objective_direction: str = "maximize",
+        constraint_operator: str = "<=",
     ) -> None:
         super().__init__()
-        if len(input_columns) < 1:
-            raise ValueError("Need at least one input column.")
+        if objective_direction not in {"maximize", "minimize"}:
+            raise ValueError("objective_direction must be 'maximize' or 'minimize'.")
+        if constraint_operator not in {"<=", ">="}:
+            raise ValueError("constraint_operator must be '<=' or '>='.")
+        data, self.dataset_health = validate_experiment_table(
+            data, input_columns, objective_column, constraint_column
+        )
 
-        X = data[input_columns].to_numpy(dtype=float)
-        y = data[objective_column].to_numpy(dtype=float)
+        aggregate_columns = [objective_column] + ([constraint_column] if constraint_column else [])
+        model_data = data.groupby(input_columns, as_index=False)[aggregate_columns].mean()
+
+        X = model_data[input_columns].to_numpy(dtype=float)
+        y = model_data[objective_column].to_numpy(dtype=float)
 
         self.dimension_names = tuple(dimension_names or input_columns)
         self.clip_range = clip_range
         self.bounds = np.column_stack([X.min(axis=0), X.max(axis=0)])
         self.n_real_experiments = len(data)
         self.objective_column = objective_column
+        self.objective_direction = objective_direction
+        self.constraint_operator = constraint_operator
 
         self._emulator = GPSurrogate(self.bounds, random_state=random_state).fit(X, y)
         self._X_train, self._y_train = X, y
 
         self._constraint_emulator = None
         if constraint_column is not None:
-            c = data[constraint_column].to_numpy(dtype=float)
+            c = model_data[constraint_column].to_numpy(dtype=float)
             self._constraint_emulator = GPSurrogate(self.bounds, random_state=random_state).fit(X, c)
             self.constraint_max = constraint_max
             self.constraint_name = constraint_column
@@ -101,3 +115,27 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
             mean, _ = fold_gp.predict(self._X_train[test_idx])
             squared_errors.extend((mean - self._y_train[test_idx]) ** 2)
         return float(np.sqrt(np.mean(squared_errors)))
+
+    def emulator_cross_validation(self, n_splits: int = 5, random_state: int = 0) -> dict[str, float]:
+        """Cross-validated diagnostics; these quantify emulator fit, not lab noise."""
+        n_splits = min(n_splits, len(self._X_train))
+        if n_splits < 2:
+            return {"rmse": float("nan"), "mae": float("nan"), "r2": float("nan")}
+        kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+        observed: list[float] = []
+        predicted: list[float] = []
+        for train_idx, test_idx in kfold.split(self._X_train):
+            fold_gp = GPSurrogate(self.bounds, random_state=random_state).fit(
+                self._X_train[train_idx], self._y_train[train_idx]
+            )
+            mean, _ = fold_gp.predict(self._X_train[test_idx])
+            observed.extend(self._y_train[test_idx])
+            predicted.extend(mean)
+        observed_array = np.asarray(observed)
+        predicted_array = np.asarray(predicted)
+        return {
+            "rmse": float(np.sqrt(np.mean((observed_array - predicted_array) ** 2))),
+            "mae": float(mean_absolute_error(observed_array, predicted_array)),
+            "r2": float(r2_score(observed_array, predicted_array)),
+        }
+
