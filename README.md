@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/titrate-logo.png" alt="Titrate logo" width="150">
+</p>
+
 # Titrate
 
 **Constrained Bayesian optimization for chemical process design — how many experiments does it actually take to find a near-optimal reaction condition?**
