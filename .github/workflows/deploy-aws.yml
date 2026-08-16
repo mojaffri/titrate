@@ -1,0 +1,76 @@
+name: Deploy API to AWS App Runner
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: titrate-aws-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: aws-production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ECR_REPOSITORY: titrate-api
+      STACK_NAME: titrate-apprunner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to AWS with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create the ECR repository if needed
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1 || \
+            aws ecr create-repository \
+              --repository-name "$ECR_REPOSITORY" \
+              --image-scanning-configuration scanOnPush=true \
+              --image-tag-mutability IMMUTABLE >/dev/null
+
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy or update App Runner
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          aws cloudformation deploy \
+            --stack-name "$STACK_NAME" \
+            --template-file infra/aws/apprunner.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides ImageUri="$IMAGE_URI" ServiceName=titrate-api \
+            --no-fail-on-empty-changeset
+
+      - name: Smoke test the deployed service
+        run: |
+          SERVICE_URL="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs[?OutputKey==`ServiceUrl`].OutputValue' \
+            --output text)"
+          for attempt in {1..60}; do
+            if curl --fail --silent "https://${SERVICE_URL}/health" | grep --quiet '"status":"ok"'; then
+              echo "Healthy deployment: https://${SERVICE_URL}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "App Runner did not become healthy within 10 minutes" >&2
+          exit 1

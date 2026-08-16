@@ -6,7 +6,7 @@
 
 **Constrained Bayesian optimization for chemical process design — how many experiments does it actually take to find a near-optimal reaction condition?**
 
-**[🔗 Live demo — titrate.streamlit.app](https://titrate.streamlit.app/)** — interactive: swap between the physics simulator and real reaction data, adjust engineering constraints, or upload your own CSV. See [§14](#14-demo).
+**[🔗 Live demo — titrate.streamlit.app](https://titrate.streamlit.app/)** — run constrained BO or open the Model Lab for a held-out GP vs PyTorch comparison with uncertainty, learning curves, and interactive predictions. See [§14](#14-demo).
 
 Titrate is an open-source benchmark and optimization engine for the small-data experiment-design problem at the core of AI-native chemistry/process-R&D companies: given a limited number of experiments, which condition should you run next to reach the best (feasible) outcome as fast as possible? It implements Gaussian-process-based constrained Bayesian optimization from scratch on top of a physically grounded chemical reactor model, and rigorously benchmarks it against random search, grid search, and Latin Hypercube Sampling across 40 random seeds — then validates the same method on a real published chemistry dataset (see [§9](#9-real-data-validation)).
 
@@ -44,7 +44,8 @@ Titrate is an open-source benchmark and optimization engine for the small-data e
 12. [Reproducing this](#12-reproducing-this)
 13. [Repository layout](#13-repository-layout)
 14. [Demo](#14-demo)
-15. [Future work](#15-future-work)
+15. [Production ML path](#15-production-ml-path)
+16. [Future work](#16-future-work)
 
 ---
 
@@ -216,13 +217,16 @@ src/titrate/
 ├── physics/         # Arrhenius kinetics + CSTR mass balance (the ground truth)
 ├── environments/     # ExperimentEnvironment interface -- the seam between
 │                      # "what's being optimized" and "how it's optimized"
-├── surrogate/        # GP regression wrapper
+├── surrogate/        # GP default + PyTorch MLP alternative
 ├── optimization/      # Acquisition functions (EI, constrained EI) + BO loop
 ├── baselines/         # Random search, grid search, Latin Hypercube Sampling
-└── evaluation/         # Multi-seed benchmark harness, metrics, plotting
+├── serving/           # FastAPI model inference service
+└── evaluation/         # Benchmarks, metrics, plots, model comparison
 experiments/run_benchmark.py            # regenerates results/ from scratch
 experiments/run_real_data_benchmark.py  # regenerates results/real_data/ from scratch
 webapp/app.py                            # interactive Streamlit demo (see below)
+webapp/pages/1_Model_Lab.py              # GP vs PyTorch held-out evidence
+infra/aws/                               # App Runner + GitHub OIDC CloudFormation
 data/                                     # real dataset + provenance (see data/README.md)
 tests/                          # mirrors src/ layout
 results/                        # committed benchmark outputs + figures
@@ -234,7 +238,7 @@ The `ExperimentEnvironment` abstraction ([`titrate/environments/base.py`](src/ti
 
 **[titrate.streamlit.app](https://titrate.streamlit.app/)** — a live, working app, not a mockup. It runs the real `titrate` package: same GP surrogate, same from-scratch constrained-EI acquisition as the benchmark above. Each click of "Run this experiment" fits fresh GPs on whatever data exists so far, picks the next point by maximizing constrained EI, queries the environment, and updates every panel.
 
-Three data sources, one underlying code path -- the actual point of the `ExperimentEnvironment` abstraction (§13), demonstrated live rather than just asserted:
+The main optimizer page has three data sources and one underlying code path -- the actual point of the `ExperimentEnvironment` abstraction (§13), demonstrated live rather than just asserted:
 
 - **Synthetic CSTR simulator**, with the engineering constraints (max temperature, residence time, catalyst loading, impurity spec) adjustable via sliders in the sidebar -- watch the recommended experiment and the true optimum shift as the constraints change.
 - **Real Suzuki-Miyaura data** (§9) -- the same emulator used in the real-data validation.
@@ -253,7 +257,17 @@ streamlit run webapp/app.py
 
 Every panel shown: current best observed value, experiments performed, model uncertainty at the recommended point, the search domain and constraints, the recommended next experiment with its expected improvement, a table of all experiments run, a GP prediction slice (with the environment's own noiseless function for comparison), a 2D predicted-value landscape with the constraint GP's feasibility boundary overlaid (when a constraint is present), and this session's convergence -- benchmarked against the precomputed 40-seed medians from `results/benchmark_trials.csv` when running the CSTR simulator.
 
-## 15. Future work
+The **Model Lab** is a second page designed to make the model trade-off visible rather than burying it in code. It trains both models on identical observations, reports held-out RMSE/MAE/R², predictive uncertainty and 95% interval coverage, plots learning curves and PyTorch training history, and lets a visitor compare both predictions with the physics simulator at any operating condition. The result is intentionally allowed to favor either model; the GP remains the BO default for small experimental budgets.
+
+## 15. Production ML path
+
+The PyTorch path adds a versioned surrogate artifact, early stopping, MC-dropout uncertainty, optional MLflow tracking, a validated FastAPI batch-inference service, non-root Docker image with a baked model and health check, API integration tests, and container-level CI smoke tests.
+
+A manually triggered AWS workflow builds an immutable commit-SHA image, pushes it to ECR, deploys it to App Runner with CloudFormation, and smoke-tests the live health endpoint. Authentication uses GitHub OIDC and a protected `aws-production` environment; no AWS access keys or model secrets are committed. The workflow is intentionally restricted to `main` and is only a deployment scaffold until its one-time AWS bootstrap has been completed. See [`docs/MLOPS.md`](docs/MLOPS.md) for commands and architecture.
+
+This does not replace the project’s scientific core: **GP = sample-efficient small-data BO default; PyTorch = scalable supervised-learning and serving alternative.**
+
+## 16. Future work
 
 - Extend real-data validation ([§9](#9-real-data-validation)) to additional Reizman/Baumgartner catalyst subsets and datasets.
 - Batch/parallel acquisition (e.g. via BoTorch) for settings where several experiments can run simultaneously.

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -18,7 +19,7 @@ from titrate.surrogate.torch_model import TorchSurrogate
 
 
 class PredictRequest(BaseModel):
-    points: list[list[float]] = Field(min_length=1)
+    points: list[list[float]] = Field(min_length=1, max_length=256)
     mc_samples: int = Field(default=50, ge=2, le=500)
 
 
@@ -34,12 +35,22 @@ class PredictResponse(BaseModel):
 
 @lru_cache(maxsize=1)
 def get_model() -> TorchSurrogate:
-    model_path = os.getenv("TITRATE_MODEL_PATH", "artifacts/torch_surrogate.pt")
-    if not os.path.exists(model_path):
+    model_path = Path(os.getenv("TITRATE_MODEL_PATH", "artifacts/torch_surrogate.pt"))
+    if not model_path.is_file():
         raise FileNotFoundError(
             f"Model artifact not found at {model_path!r}. Set TITRATE_MODEL_PATH to a trained .pt file."
         )
-    return TorchSurrogate.load(model_path)
+    try:
+        return TorchSurrogate.load(model_path)
+    except Exception as exc:
+        raise RuntimeError("The configured model artifact could not be loaded.") from exc
+
+
+def _model_or_503() -> TorchSurrogate:
+    try:
+        return get_model()
+    except (FileNotFoundError, KeyError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Model unavailable.") from exc
 
 
 app = FastAPI(
@@ -53,31 +64,27 @@ app = FastAPI(
 def health() -> dict[str, str]:
     try:
         get_model()
-    except FileNotFoundError:
-        return {"status": "degraded", "model": "missing"}
+    except (FileNotFoundError, KeyError, RuntimeError, ValueError):
+        return {"status": "degraded", "model": "unavailable"}
     return {"status": "ok", "model": "loaded"}
 
 
 @app.get("/metadata")
 def metadata() -> dict[str, object]:
-    try:
-        model = get_model()
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    model = _model_or_503()
     return {
         "n_features": int(model.bounds.shape[0]),
         "bounds": model.bounds.tolist(),
         "device": str(model.device),
         "model": "pytorch-mlp-mc-dropout",
+        "artifact_version": 1,
+        "max_batch_size": 256,
     }
 
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest) -> PredictResponse:
-    try:
-        model = get_model()
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    model = _model_or_503()
 
     points = np.asarray(request.points, dtype=float)
     if points.ndim != 2 or points.shape[1] != model.bounds.shape[0]:

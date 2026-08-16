@@ -62,6 +62,8 @@ class TorchSurrogate:
             raise ValueError("Every input dimension must have a non-zero range.")
         if not 0 <= dropout < 1:
             raise ValueError("dropout must be in [0, 1).")
+        if not hidden_sizes or any(size <= 0 for size in hidden_sizes):
+            raise ValueError("hidden_sizes must contain positive layer widths.")
 
         self.hidden_sizes = tuple(int(size) for size in hidden_sizes)
         self.dropout = float(dropout)
@@ -99,6 +101,14 @@ class TorchSurrogate:
             raise ValueError("X and y must contain the same number of observations.")
         if len(X) < 5:
             raise ValueError("TorchSurrogate requires at least 5 observations.")
+        if X.shape[1] != self.bounds.shape[0]:
+            raise ValueError(f"Expected {self.bounds.shape[0]} input features, received {X.shape[1]}.")
+        if not np.isfinite(X).all() or not np.isfinite(y).all():
+            raise ValueError("Training data must contain only finite values.")
+        if epochs < 1 or batch_size < 1 or patience < 1:
+            raise ValueError("epochs, batch_size, and patience must be positive.")
+        if not 0.0 < validation_fraction < 1.0:
+            raise ValueError("validation_fraction must be between 0 and 1.")
 
         self._y_mean = float(y.mean())
         self._y_std = float(y.std()) if float(y.std()) > 1e-8 else 1.0
@@ -178,7 +188,12 @@ class TorchSurrogate:
         if mc_samples < 2:
             raise ValueError("mc_samples must be at least 2 to estimate uncertainty.")
 
-        X_tensor = torch.tensor(self._scale_x(np.atleast_2d(X)), dtype=torch.float32, device=self.device)
+        X = np.atleast_2d(np.asarray(X, dtype=np.float32))
+        if X.shape[1] != self.bounds.shape[0]:
+            raise ValueError(f"Expected {self.bounds.shape[0]} input features, received {X.shape[1]}.")
+        if not np.isfinite(X).all():
+            raise ValueError("Prediction inputs must contain only finite values.")
+        X_tensor = torch.tensor(self._scale_x(X), dtype=torch.float32, device=self.device)
         self._model.train()  # keep dropout active for Monte Carlo uncertainty
         samples: list[np.ndarray] = []
         with torch.no_grad():
@@ -197,6 +212,7 @@ class TorchSurrogate:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
+                "artifact_version": 1,
                 "bounds": self.bounds,
                 "hidden_sizes": self.hidden_sizes,
                 "dropout": self.dropout,
@@ -211,6 +227,8 @@ class TorchSurrogate:
     @classmethod
     def load(cls, path: str | Path, device: str | None = None) -> "TorchSurrogate":
         checkpoint = torch.load(Path(path), map_location=device or "cpu", weights_only=False)
+        if checkpoint.get("artifact_version") != 1:
+            raise ValueError("Unsupported or missing TorchSurrogate artifact version.")
         model = cls(
             bounds=np.asarray(checkpoint["bounds"], dtype=float),
             hidden_sizes=tuple(checkpoint["hidden_sizes"]),

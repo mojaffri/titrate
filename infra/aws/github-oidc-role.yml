@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: One-time GitHub OIDC deploy role for the Titrate AWS workflow.
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Default: mojaffri
+  GitHubRepository:
+    Type: String
+    Default: titrate
+  RoleName:
+    Type: String
+    Default: titrate-github-deploy
+  ExistingGitHubOidcProviderArn:
+    Type: String
+    Default: ""
+    Description: Optional ARN of an existing token.actions.githubusercontent.com OIDC provider.
+
+Conditions:
+  CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, ""]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateGitHubOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOwner}/${GitHubRepository}:environment:aws-production"
+      Policies:
+        - PolicyName: TitrateDeployment
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:PutImageScanningConfiguration
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !Sub "arn:${AWS::Partition}:ecr:*:${AWS::AccountId}:repository/titrate-*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:ListStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                Resource: !Sub "arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/titrate-*/*"
+              - Effect: Allow
+                Action:
+                  - apprunner:CreateService
+                  - apprunner:UpdateService
+                  - apprunner:DescribeService
+                  - apprunner:ListOperations
+                  - apprunner:TagResource
+                  - apprunner:UntagResource
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/titrate-*"
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt DeployRole.Arn
+    Description: Save this ARN as the AWS_DEPLOY_ROLE_ARN environment secret in GitHub.

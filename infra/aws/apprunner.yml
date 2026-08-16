@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy the versioned Titrate API container to AWS App Runner.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Immutable ECR image URI, normally tagged with the Git commit SHA.
+  ServiceName:
+    Type: String
+    Default: titrate-api
+
+Resources:
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ServiceName}-apprunner-ecr-access"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  Service:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerEcrAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "8000"
+            RuntimeEnvironmentVariables:
+              TITRATE_MODEL_PATH: /app/artifacts/torch_surrogate.pt
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      InstanceConfiguration:
+        Cpu: "1 vCPU"
+        Memory: "2 GB"
+      Tags:
+        - Key: project
+          Value: titrate
+        - Key: managed-by
+          Value: cloudformation
+
+Outputs:
+  ServiceArn:
+    Value: !GetAtt Service.ServiceArn
+  ServiceUrl:
+    Value: !GetAtt Service.ServiceUrl
+    Description: Public App Runner hostname (without the https scheme).
