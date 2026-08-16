@@ -106,6 +106,28 @@ The container starts the FastAPI service with Uvicorn and is immediately healthy
 
 The repository includes a real, manually triggered deployment workflow at `.github/workflows/deploy-aws.yml` and CloudFormation under `infra/aws/`. It uses GitHub OIDC, immutable commit-SHA image tags, ECR image scanning, App Runner health checks, and a post-deploy smoke test. No AWS access keys are stored in the repository.
 
+```mermaid
+flowchart LR
+    DEV["Green commit on main"] --> GHA["Protected GitHub environment"]
+    GHA -->|"short-lived OIDC credentials"| IAM["Scoped AWS deploy role"]
+    GHA -->|"build + push SHA tag"| ECR["Private ECR repository"]
+    ECR --> AR["App Runner service"]
+    CFN["CloudFormation"] --> AR
+    AR --> OBS["Health, Prometheus metrics and drift diagnostics"]
+```
+
+### Validation without an AWS bill
+
+The default CI path never authenticates to AWS and never creates resources. It:
+
+1. validates every template with `cfn-lint`;
+2. scans the CloudFormation with Checkov and fails on unapproved findings;
+3. builds the exact deployment container;
+4. starts it as a non-root user; and
+5. smoke-tests health, metadata, prediction, monitoring and metrics over HTTP.
+
+This is intentionally described as a **deployment-ready AWS architecture**, not as an always-on production service. A live deployment is optional evidence, not a requirement for reproducing the engineering work.
+
 ### One-time AWS bootstrap
 
 Run this from an AWS administrator session. If the account already has GitHub's OIDC provider, pass its ARN through `ExistingGitHubOidcProviderArn`.
@@ -123,6 +145,18 @@ Then create a protected GitHub environment named `aws-production`:
 2. Optionally set the environment variable `AWS_REGION` (default: `us-east-1`).
 3. Add required reviewers to the environment if the account supports them.
 
+Optional but recommended: create the free monitoring-only AWS Budget from an administrator session. This budget is account-wide, because cost-allocation tags are not active automatically in a fresh account.
+
+```bash
+aws cloudformation deploy \
+  --region us-east-1 \
+  --stack-name titrate-cost-budget \
+  --template-file infra/aws/budget.yml \
+  --parameter-overrides NotificationEmail=you@example.com MonthlyBudgetUsd=5
+```
+
+It alerts at 50% and 80% of actual monthly spend and at 100% forecasted spend. Budget notifications can lag usage, so they are alerts rather than a hard spending cap.
+
 ### Deploy
 
 Merge a green PR, then manually run **Deploy API to AWS App Runner** from `main`. The workflow:
@@ -132,6 +166,22 @@ Merge a green PR, then manually run **Deploy API to AWS App Runner** from `main`
 3. builds and pushes an image tagged with the exact Git commit SHA;
 4. deploys `infra/aws/apprunner.yml` through CloudFormation; and
 5. waits for `/health` to return healthy.
+
+Cost controls are conservative by default:
+
+- App Runner can run at most one active instance unless `MaxInstances` is deliberately changed;
+- automatic source deployments are disabled;
+- ECR expires all but the five newest images;
+- optional CloudWatch alarms are off by default because alarms can incur a small charge; and
+- the service can be removed through the guarded teardown workflow when a demonstration ends.
+
+### Tear down after a demonstration
+
+Run **Tear down AWS portfolio deployment** manually from `main`, enter `delete-titrate`, and choose whether to delete the ECR images too. The workflow shares the deployment concurrency group, uses the protected `aws-production` environment and refuses to run from another branch. It deletes the App Runner CloudFormation stack first and only deletes ECR when the separate boolean input is enabled.
+
+The one-time `titrate-github-oidc` bootstrap stack is intentionally retained so the deployment can be recreated. Delete that stack manually only when the repository will never deploy again.
+
+The default 1-vCPU/2-GB App Runner service is **not free when left provisioned**. Pause or tear it down when it is not being demonstrated. The local application and CI evidence remain complete without any AWS deployment.
 
 The workflow deliberately refuses to deploy from non-`main` refs. The repository does not claim a live AWS deployment until this bootstrap is completed and the workflow succeeds.
 

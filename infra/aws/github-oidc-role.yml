@@ -62,6 +62,7 @@ Resources:
                   - ecr:CreateRepository
                   - ecr:DescribeRepositories
                   - ecr:PutImageScanningConfiguration
+                  - ecr:PutLifecyclePolicy
                   - ecr:BatchCheckLayerAvailability
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
@@ -69,11 +70,13 @@ Resources:
                   - ecr:InitiateLayerUpload
                   - ecr:PutImage
                   - ecr:UploadLayerPart
+                  - ecr:DeleteRepository
                 Resource: !Sub "arn:${AWS::Partition}:ecr:*:${AWS::AccountId}:repository/titrate-*"
               - Effect: Allow
                 Action:
                   - cloudformation:CreateStack
                   - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
                   - cloudformation:DescribeStacks
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStackResources
@@ -84,12 +87,24 @@ Resources:
               - Effect: Allow
                 Action:
                   - apprunner:CreateService
+                  - apprunner:CreateAutoScalingConfiguration
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestTag/project: titrate
+              - Effect: Allow
+                Action:
                   - apprunner:UpdateService
+                  - apprunner:DeleteService
                   - apprunner:DescribeService
                   - apprunner:ListOperations
+                  - apprunner:DeleteAutoScalingConfiguration
+                  - apprunner:DescribeAutoScalingConfiguration
                   - apprunner:TagResource
                   - apprunner:UntagResource
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:apprunner:*:${AWS::AccountId}:service/titrate-*/*"
+                  - !Sub "arn:${AWS::Partition}:apprunner:*:${AWS::AccountId}:autoscalingconfiguration/titrate-*/*/*"
               - Effect: Allow
                 Action:
                   - iam:CreateRole
@@ -98,8 +113,15 @@ Resources:
                   - iam:UpdateAssumeRolePolicy
                   - iam:AttachRolePolicy
                   - iam:DetachRolePolicy
+                  - iam:DeleteRole
                   - iam:TagRole
                 Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/titrate-*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:PutMetricAlarm
+                Resource: !Sub "arn:${AWS::Partition}:cloudwatch:*:${AWS::AccountId}:alarm:titrate-*"
 
 Outputs:
   DeployRoleArn:

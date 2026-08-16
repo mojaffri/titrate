@@ -36,6 +36,9 @@ jobs:
               --repository-name "$ECR_REPOSITORY" \
               --image-scanning-configuration scanOnPush=true \
               --image-tag-mutability IMMUTABLE >/dev/null
+          aws ecr put-lifecycle-policy \
+            --repository-name "$ECR_REPOSITORY" \
+            --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep only the five newest portfolio images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":5},"action":{"type":"expire"}}]}' >/dev/null
 
       - id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -56,7 +59,7 @@ jobs:
             --stack-name "$STACK_NAME" \
             --template-file infra/aws/apprunner.yml \
             --capabilities CAPABILITY_NAMED_IAM \
-            --parameter-overrides ImageUri="$IMAGE_URI" ServiceName=titrate-api \
+            --parameter-overrides ImageUri="$IMAGE_URI" ServiceName=titrate-api MaxInstances=1 EnableCloudWatchAlarms=false \
             --no-fail-on-empty-changeset
 
       - name: Smoke test the deployed service
