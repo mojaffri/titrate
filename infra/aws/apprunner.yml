@@ -39,6 +39,9 @@ Resources:
             Port: "8000"
             RuntimeEnvironmentVariables:
               TITRATE_MODEL_PATH: /app/artifacts/torch_surrogate.pt
+              TITRATE_MONITOR_WINDOW: "2048"
+              TITRATE_DRIFT_MIN_SAMPLES: "25"
+              TITRATE_DRIFT_THRESHOLD: "0.75"
       HealthCheckConfiguration:
         Protocol: HTTP
         Path: /health

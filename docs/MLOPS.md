@@ -55,6 +55,8 @@ Endpoints:
 
 - `GET /health`
 - `GET /metadata`
+- `GET /monitoring`
+- `GET /metrics` (Prometheus text format)
 - `POST /predict`
 
 Example request:
@@ -68,9 +70,28 @@ Example request:
 
 The response includes both the predicted objective and predictive standard deviation.
 
-The API limits inference batches to 256 points and rejects malformed, non-finite, or out-of-bounds inputs. Integration tests train and load a real artifact before exercising health, metadata, prediction, and failure behavior.
+The API limits inference batches to 256 points and rejects malformed, non-finite, or out-of-bounds inputs. Integration tests train and load a real artifact before exercising health, metadata, prediction, monitoring, metrics, and failure behavior.
 
-## 5. Docker
+## 5. Observability and drift monitoring
+
+Every version-2 model artifact records the scaled feature mean and standard deviation of its training data. The service keeps only a bounded, thread-safe rolling window of recent inference inputs, predictions, and MC-dropout uncertainty. `GET /monitoring` reports:
+
+- total predictions and current window size;
+- rolling mean prediction and predictive uncertainty;
+- per-feature standardized mean shift from the training reference;
+- the maximum shift and whether it crossed the configured drift threshold.
+
+Drift requires a minimum window size, so one interactive request does not create a false alert. Configure the process-local monitor with:
+
+- `TITRATE_MONITOR_WINDOW` (default `2048` predictions);
+- `TITRATE_DRIFT_MIN_SAMPLES` (default `25`); and
+- `TITRATE_DRIFT_THRESHOLD` (default `0.75` training standard deviations).
+
+`GET /metrics` exposes Prometheus-compatible request counts, request latency, prediction volume, uncertainty, monitoring-window size, drift score, and drift status. CI makes a prediction against the built container and verifies both monitoring endpoints.
+
+The rolling window is intentionally process-local and bounded. In a multi-replica production deployment, scrape every replica into Prometheus/CloudWatch and compute durable fleet-level drift from centralized inference logs. Protect `/metrics` and `/monitoring` with private networking or an authenticated gateway before exposing a production service; they remain public in this portfolio scaffold so the behavior is inspectable.
+
+## 6. Docker
 
 The image trains a small deterministic model during the build, runs as a non-root user, and includes a container health check:
 
@@ -79,9 +100,9 @@ docker build -t titrate-api .
 docker run -p 8000:8000 titrate-api
 ```
 
-The container starts the FastAPI service with Uvicorn and is immediately healthy; no untracked local artifact is required. Override `MODEL_SAMPLES` and `MODEL_EPOCHS` as build arguments when needed. CI builds the image, starts it, and exercises all three API endpoints.
+The container starts the FastAPI service with Uvicorn and is immediately healthy; no untracked local artifact is required. Override `MODEL_SAMPLES` and `MODEL_EPOCHS` as build arguments when needed. CI builds the image, starts it, and exercises health, metadata, prediction, drift diagnostics, and Prometheus metrics.
 
-## 6. AWS App Runner deployment
+## 7. AWS App Runner deployment
 
 The repository includes a real, manually triggered deployment workflow at `.github/workflows/deploy-aws.yml` and CloudFormation under `infra/aws/`. It uses GitHub OIDC, immutable commit-SHA image tags, ECR image scanning, App Runner health checks, and a post-deploy smoke test. No AWS access keys are stored in the repository.
 
@@ -114,7 +135,7 @@ Merge a green PR, then manually run **Deploy API to AWS App Runner** from `main`
 
 The workflow deliberately refuses to deploy from non-`main` refs. The repository does not claim a live AWS deployment until this bootstrap is completed and the workflow succeeds.
 
-For larger production models, keep the same image/API contract but fetch a separately versioned artifact from S3 at startup and add CloudWatch alarms around latency, error rate, and model-load failures.
+For larger production models, keep the same image/API contract but fetch a separately versioned artifact from S3 at startup and add CloudWatch alarms around latency, error rate, model-load failures, predictive uncertainty, and the exported drift score.
 
 ## Why both GP and PyTorch?
 

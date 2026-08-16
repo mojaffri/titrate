@@ -73,8 +73,11 @@ class TorchSurrogate:
         np.random.seed(self.random_state)
 
         self._model = _MLP(self.bounds.shape[0], self.hidden_sizes, self.dropout).to(self.device)
+        self.artifact_version = 2
         self._y_mean = 0.0
         self._y_std = 1.0
+        self._reference_x_mean = np.full(self.bounds.shape[0], 0.5, dtype=float)
+        self._reference_x_std = np.full(self.bounds.shape[0], np.sqrt(1.0 / 12.0), dtype=float)
         self._fitted = False
 
     def _scale_x(self, X: np.ndarray) -> np.ndarray:
@@ -113,6 +116,11 @@ class TorchSurrogate:
         self._y_mean = float(y.mean())
         self._y_std = float(y.std()) if float(y.std()) > 1e-8 else 1.0
         X_scaled = self._scale_x(X)
+        self._reference_x_mean = X_scaled.mean(axis=0, dtype=np.float64)
+        self._reference_x_std = np.maximum(
+            X_scaled.std(axis=0, dtype=np.float64),
+            1e-8,
+        )
         y_scaled = (y - self._y_mean) / self._y_std
 
         rng = np.random.default_rng(self.random_state)
@@ -205,6 +213,22 @@ class TorchSurrogate:
         std = stacked.std(axis=0, ddof=1) * self._y_std
         return mean.astype(float), np.maximum(std, 1e-9).astype(float)
 
+    def scale_inputs(self, X: np.ndarray) -> np.ndarray:
+        """Validate and scale physical inputs for monitoring or diagnostics."""
+
+        X = np.atleast_2d(np.asarray(X, dtype=np.float32))
+        if X.shape[1] != self.bounds.shape[0]:
+            raise ValueError(f"Expected {self.bounds.shape[0]} input features, received {X.shape[1]}.")
+        if not np.isfinite(X).all():
+            raise ValueError("Inputs must contain only finite values.")
+        return self._scale_x(X).astype(float)
+
+    @property
+    def reference_distribution(self) -> tuple[np.ndarray, np.ndarray]:
+        """Training-distribution mean and standard deviation in scaled space."""
+
+        return self._reference_x_mean.copy(), self._reference_x_std.copy()
+
     def save(self, path: str | Path) -> None:
         if not self._fitted:
             raise RuntimeError("Cannot save an unfitted TorchSurrogate.")
@@ -212,13 +236,15 @@ class TorchSurrogate:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
-                "artifact_version": 1,
+                "artifact_version": self.artifact_version,
                 "bounds": self.bounds,
                 "hidden_sizes": self.hidden_sizes,
                 "dropout": self.dropout,
                 "random_state": self.random_state,
                 "y_mean": self._y_mean,
                 "y_std": self._y_std,
+                "reference_x_mean": self._reference_x_mean,
+                "reference_x_std": self._reference_x_std,
                 "state_dict": self._model.state_dict(),
             },
             path,
@@ -227,7 +253,8 @@ class TorchSurrogate:
     @classmethod
     def load(cls, path: str | Path, device: str | None = None) -> "TorchSurrogate":
         checkpoint = torch.load(Path(path), map_location=device or "cpu", weights_only=False)
-        if checkpoint.get("artifact_version") != 1:
+        artifact_version = int(checkpoint.get("artifact_version", 0))
+        if artifact_version not in {1, 2}:
             raise ValueError("Unsupported or missing TorchSurrogate artifact version.")
         model = cls(
             bounds=np.asarray(checkpoint["bounds"], dtype=float),
@@ -239,6 +266,13 @@ class TorchSurrogate:
         model._model.load_state_dict(checkpoint["state_dict"])
         model._y_mean = float(checkpoint["y_mean"])
         model._y_std = float(checkpoint["y_std"])
+        model.artifact_version = artifact_version
+        if artifact_version >= 2:
+            model._reference_x_mean = np.asarray(checkpoint["reference_x_mean"], dtype=float)
+            model._reference_x_std = np.maximum(
+                np.asarray(checkpoint["reference_x_std"], dtype=float),
+                1e-8,
+            )
         model._fitted = True
         model._model.to(model.device)
         return model

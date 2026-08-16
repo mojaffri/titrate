@@ -38,11 +38,13 @@ jobs:
             fi
             sleep 2
           done
-          curl --fail --silent http://127.0.0.1:8000/metadata | grep --quiet '"artifact_version":1'
+          curl --fail --silent http://127.0.0.1:8000/metadata | grep --quiet '"artifact_version":2'
           curl --fail --silent \
             --header 'Content-Type: application/json' \
             --data '{"points":[[360.0,2.0,1.0]],"mc_samples":10}' \
             http://127.0.0.1:8000/predict | grep --quiet '"predictions"'
+          curl --fail --silent http://127.0.0.1:8000/monitoring | grep --quiet '"total_predictions":1'
+          curl --fail --silent http://127.0.0.1:8000/metrics | grep --quiet 'titrate_predictions_total'
       - name: Show container logs on failure
         if: failure()
         run: docker logs titrate-api

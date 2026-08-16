@@ -33,8 +33,10 @@ def model_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def configured_client(monkeypatch: pytest.MonkeyPatch, model_artifact: Path) -> TestClient:
     monkeypatch.setenv("TITRATE_MODEL_PATH", str(model_artifact))
     api.get_model.cache_clear()
+    api.prediction_monitor.reset()
     yield TestClient(api.app)
     api.get_model.cache_clear()
+    api.prediction_monitor.reset()
 
 
 def test_health_and_metadata_load_real_artifact(configured_client: TestClient) -> None:
@@ -45,8 +47,9 @@ def test_health_and_metadata_load_real_artifact(configured_client: TestClient) -
     assert health.json() == {"status": "ok", "model": "loaded"}
     assert metadata.status_code == 200
     assert metadata.json()["n_features"] == 3
-    assert metadata.json()["artifact_version"] == 1
+    assert metadata.json()["artifact_version"] == 2
     assert metadata.json()["max_batch_size"] == 256
+    assert len(metadata.json()["monitoring_reference"]["scaled_feature_mean"]) == 3
 
 
 def test_predict_returns_batch_means_and_uncertainty(configured_client: TestClient) -> None:
@@ -61,6 +64,28 @@ def test_predict_returns_batch_means_and_uncertainty(configured_client: TestClie
     assert len(payload["predictions"]) == 2
     assert all(np.isfinite(item["mean"]) for item in payload["predictions"])
     assert all(item["std"] > 0 for item in payload["predictions"])
+
+    monitoring = configured_client.get("/monitoring")
+    assert monitoring.status_code == 200
+    assert monitoring.json()["window_size"] == 2
+    assert monitoring.json()["total_predictions"] == 2
+    assert monitoring.json()["mean_predictive_uncertainty"] > 0
+    assert monitoring.json()["drift_detected"] is False
+
+
+def test_prometheus_metrics_expose_service_and_model_signals(configured_client: TestClient) -> None:
+    configured_client.post(
+        "/predict",
+        json={"points": [[360.0, 2.0, 1.0]], "mc_samples": 6},
+    )
+    response = configured_client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    assert "titrate_http_requests_total" in response.text
+    assert "titrate_http_request_duration_seconds" in response.text
+    assert "titrate_predictions_total" in response.text
+    assert "titrate_predictive_uncertainty" in response.text
 
 
 @pytest.mark.parametrize(

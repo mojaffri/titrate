@@ -220,7 +220,7 @@ src/titrate/
 ├── surrogate/        # GP default + PyTorch MLP alternative
 ├── optimization/      # Acquisition functions (EI, constrained EI) + BO loop
 ├── baselines/         # Random search, grid search, Latin Hypercube Sampling
-├── serving/           # FastAPI model inference service
+├── serving/           # FastAPI inference, Prometheus metrics, drift monitor
 └── evaluation/         # Benchmarks, metrics, plots, model comparison
 experiments/run_benchmark.py            # regenerates results/ from scratch
 experiments/run_real_data_benchmark.py  # regenerates results/real_data/ from scratch
@@ -261,7 +261,7 @@ The **Model Lab** is a second page designed to make the model trade-off visible 
 
 ## 15. Production ML path
 
-The PyTorch path adds a versioned surrogate artifact, early stopping, MC-dropout uncertainty, optional MLflow tracking, a validated FastAPI batch-inference service, non-root Docker image with a baked model and health check, API integration tests, and container-level CI smoke tests.
+The PyTorch path adds a versioned surrogate artifact with a training-distribution reference, early stopping, MC-dropout uncertainty, optional MLflow tracking, a validated FastAPI batch-inference service, Prometheus-compatible service/model metrics, bounded rolling drift diagnostics, a non-root Docker image with a baked model and health check, API integration tests, and container-level CI smoke tests.
 
 A manually triggered AWS workflow builds an immutable commit-SHA image, pushes it to ECR, deploys it to App Runner with CloudFormation, and smoke-tests the live health endpoint. Authentication uses GitHub OIDC and a protected `aws-production` environment; no AWS access keys or model secrets are committed. The workflow is intentionally restricted to `main` and is only a deployment scaffold until its one-time AWS bootstrap has been completed. See [`docs/MLOPS.md`](docs/MLOPS.md) for commands and architecture.
 
