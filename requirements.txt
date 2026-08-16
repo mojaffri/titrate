@@ -4,3 +4,7 @@ scikit-learn>=1.4
 pandas>=2.1
 matplotlib>=3.8
 streamlit>=1.38
+torch>=2.3
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
