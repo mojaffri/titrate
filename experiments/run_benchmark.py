@@ -78,7 +78,6 @@ def main() -> None:
     headline = {}
     for strategy, group in summary.groupby("strategy"):
         wall_clock = trials.loc[trials["strategy"] == strategy, "wall_clock_seconds"]
-        final_iter = trials[(trials["strategy"] == strategy) & (trials["iteration"] == BUDGET)]
         headline[strategy] = {
             "median_experiments_to_90pct": float(group["experiments_to_90pct"].median()),
             "median_experiments_to_95pct": float(group["experiments_to_95pct"].median()),

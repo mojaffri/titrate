@@ -4,8 +4,9 @@ around scikit-learn's GaussianProcessRegressor.
 Chosen over a neural network deliberately: with the small experiment budgets
 this project targets (tens of points, not thousands), a GP gives calibrated
 posterior uncertainty out of the box and is the standard small-data
-surrogate choice in the Bayesian optimization literature. A deep model would
-be both harder to justify and harder to trust here.
+surrogate choice in the Bayesian optimization literature. Titrate's separate
+PyTorch surrogate complements this model for larger supervised datasets; it
+does not replace the GP in the small-data optimization loop.
 """
 
 from __future__ import annotations
@@ -21,7 +22,12 @@ class GPSurrogate:
     stable marginal-likelihood optimization when raw dimensions have very
     different physical scales (e.g. temperature ~350 vs. catalyst ~1)."""
 
-    def __init__(self, bounds: np.ndarray, random_state: int = 0) -> None:
+    def __init__(
+        self,
+        bounds: np.ndarray,
+        random_state: int = 0,
+        n_restarts_optimizer: int = 5,
+    ) -> None:
         self.bounds = np.asarray(bounds, dtype=float)
         if self.bounds.ndim != 2 or self.bounds.shape[1] != 2:
             raise ValueError("bounds must have shape (n_dimensions, 2).")
@@ -29,6 +35,8 @@ class GPSurrogate:
             raise ValueError("bounds must contain only finite values.")
         if np.any(self.bounds[:, 1] <= self.bounds[:, 0]):
             raise ValueError("Every input dimension must have a non-zero range.")
+        if n_restarts_optimizer < 0:
+            raise ValueError("n_restarts_optimizer must be non-negative.")
         n_dims = self.bounds.shape[0]
         kernel = ConstantKernel(1.0, (1e-2, 1e2)) * Matern(
             length_scale=np.ones(n_dims),
@@ -38,7 +46,7 @@ class GPSurrogate:
         self._gp = GaussianProcessRegressor(
             kernel=kernel,
             normalize_y=False,
-            n_restarts_optimizer=5,
+            n_restarts_optimizer=n_restarts_optimizer,
             random_state=random_state,
         )
         self._y_mean = 0.0

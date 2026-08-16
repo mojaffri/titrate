@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy the versioned Titrate API container to AWS App Runner.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Immutable ECR image URI, normally tagged with the Git commit SHA.
+  ServiceName:
+    Type: String
+    Default: titrate-api
+    AllowedPattern: "[A-Za-z0-9][A-Za-z0-9-_]{3,39}"
+  MaxInstances:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 3
+    Description: Cost guardrail for this portfolio service. Increase deliberately for real traffic.
+  EnableCloudWatchAlarms:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Create two billable CloudWatch alarms only when explicitly enabled.
+
+Conditions:
+  CreateCloudWatchAlarms: !Equals [!Ref EnableCloudWatchAlarms, "true"]
+
+Resources:
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ServiceName}-apprunner-ecr-access"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  CostControlledAutoScaling:
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    Properties:
+      AutoScalingConfigurationName: !Sub "${ServiceName}-cost-control"
+      MaxConcurrency: 100
+      MaxSize: !Ref MaxInstances
+      MinSize: 1
+      Tags:
+        - Key: project
+          Value: titrate
+        - Key: managed-by
+          Value: cloudformation
+
+  Service:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      AutoScalingConfigurationArn: !GetAtt CostControlledAutoScaling.AutoScalingConfigurationArn
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerEcrAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "8000"
+            RuntimeEnvironmentVariables:
+              - Name: TITRATE_MODEL_PATH
+                Value: /app/artifacts/torch_surrogate.pt
+              - Name: TITRATE_MONITOR_WINDOW
+                Value: "2048"
+              - Name: TITRATE_DRIFT_MIN_SAMPLES
+                Value: "25"
+              - Name: TITRATE_DRIFT_THRESHOLD
+                Value: "0.75"
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      InstanceConfiguration:
+        Cpu: "1 vCPU"
+        Memory: "2 GB"
+      Tags:
+        - Key: project
+          Value: titrate
+        - Key: managed-by
+          Value: cloudformation
+
+  ServerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateCloudWatchAlarms
+    Properties:
+      AlarmName: !Sub "${ServiceName}-5xx-responses"
+      AlarmDescription: App Runner returned one or more 5xx responses in two consecutive periods.
+      Namespace: AWS/AppRunner
+      MetricName: 5xxStatusResponses
+      Dimensions:
+        - Name: ServiceName
+          Value: !Ref ServiceName
+        - Name: ServiceID
+          Value: !GetAtt Service.ServiceId
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  LatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateCloudWatchAlarms
+    Properties:
+      AlarmName: !Sub "${ServiceName}-request-latency"
+      AlarmDescription: Average App Runner request latency exceeded two seconds.
+      Namespace: AWS/AppRunner
+      MetricName: RequestLatency
+      Dimensions:
+        - Name: ServiceName
+          Value: !Ref ServiceName
+        - Name: ServiceID
+          Value: !GetAtt Service.ServiceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ServiceArn:
+    Value: !GetAtt Service.ServiceArn
+  ServiceUrl:
+    Value: !GetAtt Service.ServiceUrl
+    Description: Public App Runner hostname (without the https scheme).
+  MaximumInstances:
+    Value: !Ref MaxInstances
+    Description: Maximum active instances allowed by the cost-control configuration.

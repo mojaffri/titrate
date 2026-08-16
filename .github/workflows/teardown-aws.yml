@@ -1,0 +1,56 @@
+name: Tear down AWS portfolio deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type delete-titrate to confirm removal of the App Runner stack.
+        required: true
+        type: string
+      delete_image_repository:
+        description: Also delete the ECR repository and all stored images.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: titrate-aws-production
+  cancel-in-progress: false
+
+jobs:
+  teardown:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'delete-titrate'
+    runs-on: ubuntu-latest
+    environment: aws-production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ECR_REPOSITORY: titrate-api
+      STACK_NAME: titrate-apprunner
+    steps:
+      - name: Authenticate to AWS with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Delete the App Runner stack if it exists
+        run: |
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" >/dev/null 2>&1; then
+            aws cloudformation delete-stack --stack-name "$STACK_NAME"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME"
+          else
+            echo "Stack $STACK_NAME does not exist; nothing to delete."
+          fi
+
+      - name: Delete the ECR image repository when explicitly requested
+        if: inputs.delete_image_repository
+        run: |
+          if aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1; then
+            aws ecr delete-repository --repository-name "$ECR_REPOSITORY" --force
+          else
+            echo "Repository $ECR_REPOSITORY does not exist; nothing to delete."
+          fi

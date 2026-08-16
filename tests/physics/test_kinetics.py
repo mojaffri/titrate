@@ -55,7 +55,8 @@ def test_catalyzed_rate_constant_increasing_in_loading():
 def test_catalyzed_rate_constant_saturates():
     """Diminishing returns: the marginal gain shrinks as loading increases."""
     base = 2.0
-    k = lambda c: catalyzed_rate_constant(base, c, promotion_strength=3.0, saturation_constant=2.0)
+    def k(c):
+        return catalyzed_rate_constant(base, c, promotion_strength=3.0, saturation_constant=2.0)
     early_gain = k(0.5) - k(0.0)
     late_gain = k(2.0) - k(1.5)
     assert late_gain < early_gain
