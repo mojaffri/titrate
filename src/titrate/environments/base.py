@@ -1,11 +1,4 @@
-"""Common interface every 'experiment source' implements.
-
-The physics-based CSTR simulator (V1) and, later, a real published HTE
-dataset (V2) both implement this interface. The optimization and benchmark
-code only ever talks to an ExperimentEnvironment, so swapping the underlying
-experiment source requires zero changes to the BO loop, acquisition
-function, or benchmark harness.
-"""
+"""Shared interface for simulated and data-backed experiment environments."""
 
 from __future__ import annotations
 
@@ -18,7 +11,7 @@ from scipy.optimize import NonlinearConstraint, differential_evolution
 
 @dataclass(frozen=True)
 class EvaluationResult:
-    """One experiment's outcome: the objective plus its paired constraint."""
+    """Objective and constraint values returned by one experiment."""
 
     objective: float
     constraint_value: float
@@ -26,7 +19,7 @@ class EvaluationResult:
 
 @dataclass(frozen=True)
 class OptimumInfo:
-    """The best feasible point, found offline, used only for benchmark scoring."""
+    """Offline optimum used as the benchmark scoring reference."""
 
     x: np.ndarray
     objective: float
@@ -34,7 +27,7 @@ class OptimumInfo:
 
 
 class ExperimentEnvironment(ABC):
-    """Abstract 'black box' an optimization strategy queries one point at a time."""
+    """Interface queried by optimization and benchmark routines."""
 
     dimension_names: tuple[str, ...]
     bounds: np.ndarray  # shape (n_dims, 2), rows are (low, high)
@@ -48,12 +41,11 @@ class ExperimentEnvironment(ABC):
 
     @abstractmethod
     def evaluate(self, x: np.ndarray, rng: np.random.Generator) -> EvaluationResult:
-        """Run one noisy 'experiment' at x. This is what an optimizer sees."""
+        """Evaluate one point with the environment's observation model."""
 
     @abstractmethod
     def evaluate_noiseless(self, x: np.ndarray) -> EvaluationResult:
-        """Ground-truth evaluation. Used only for benchmark scoring / optimum
-        search -- never exposed to an optimizer under test."""
+        """Evaluate one point without observation noise for benchmark scoring."""
 
     @property
     def n_dims(self) -> int:
@@ -68,16 +60,16 @@ class ExperimentEnvironment(ABC):
 
     def feasible_mask(self, values: np.ndarray) -> np.ndarray:
         values = np.asarray(values, dtype=float)
-        return values <= self.constraint_max if self.constraint_operator == "<=" else values >= self.constraint_max
+        if self.constraint_operator == "<=":
+            return values <= self.constraint_max
+        return values >= self.constraint_max
 
     def objective_score(self, values: np.ndarray | float) -> np.ndarray | float:
-        """Return values on a common higher-is-better scale."""
+        """Return objective values on a common higher-is-better scale."""
         return values if self.objective_direction == "maximize" else -np.asarray(values)
 
     def true_optimum(self) -> OptimumInfo:
-        """Global constrained optimum of the noiseless objective, computed once
-        via differential evolution and cached. This is the scoring reference
-        for every benchmark metric -- no optimizer under test ever sees it."""
+        """Compute and cache the constrained optimum of the noiseless environment."""
         if self._true_optimum_cache is not None:
             return self._true_optimum_cache
 
