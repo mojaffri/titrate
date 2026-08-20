@@ -1,25 +1,16 @@
-"""A real-data experiment environment: a GP emulator fit on real Suzuki-Miyaura
-cross-coupling flow-chemistry data, wrapped behind the same ExperimentEnvironment
-interface as the CSTR simulator (a thin specialization of TabularEmulatorEnvironment).
+"""Suzuki-Miyaura reaction environment backed by a GP emulator.
 
-Data: Reizman, B. J.; Wang, Y.-M.; Buchwald, S. L.; Jensen, K. F. "Suzuki-Miyaura
-cross-coupling optimization enabled by automated feedback." React. Chem. Eng.
-2016, 1, 658-666. See data/README.md for provenance.
+Data source:
+Reizman, B. J.; Wang, Y.-M.; Buchwald, S. L.; Jensen, K. F.
+"Suzuki-Miyaura cross-coupling optimization enabled by automated feedback."
+React. Chem. Eng. 2016, 1, 658-666.
 
-Why an emulator, not the raw table directly: a sequential optimization strategy
-needs to query points that weren't in the original 96-experiment dataset. Fitting
-a GP regression model on the real measurements and treating its predictions as
-the queryable "ground truth" is the same technique the Summit benchmarking
-package (Felton et al., 2021) uses for exactly this purpose -- it turns a fixed
-real dataset into a continuously queryable benchmark function, at the cost of
-the emulator's own regression error, which is reported (not hidden) via
-`emulator_holdout_rmse()` and in the README's real-data validation section.
+Sequential optimization requires a queryable response surface. This environment fits
+a GP to the published measurements and queries that emulator between measured points.
+The emulator error is reported by ``emulator_holdout_rmse()`` and in the README.
 
-This dataset has no purity/impurity specification, so unlike the CSTR
-environment there is no real engineering constraint here -- constraint_max is
-+inf (always satisfied), which makes constrained BO on this environment
-mathematically reduce to plain BO. This is stated explicitly rather than
-inventing a constraint that isn't in the source data.
+The source dataset does not include a purity or process constraint, so
+``constraint_max`` is infinite and all points are feasible.
 """
 
 from __future__ import annotations
@@ -35,8 +26,8 @@ DEFAULT_CATALYST = "P1-L4"  # the most-sampled catalyst in the dataset (37 of 96
 
 
 def _load_catalyst_subset(catalyst: str = DEFAULT_CATALYST) -> pd.DataFrame:
-    df = pd.read_csv(DATA_PATH, skiprows=[1])  # row 1 is a "TYPE" metadata row, not data
-    df["yld_frac"] = df["yld"] / 100.0  # yield reported as 0-100%, rescale to [0,1]
+    df = pd.read_csv(DATA_PATH, skiprows=[1])  # row 1 contains TYPE metadata
+    df["yld_frac"] = df["yld"] / 100.0
     return df[df["catalyst"] == catalyst].reset_index(drop=True)
 
 
