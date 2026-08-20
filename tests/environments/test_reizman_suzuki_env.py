@@ -10,7 +10,7 @@ def env() -> ReizmanSuzukiEnvironment:
 
 
 def test_loads_real_data_with_expected_shape(env: ReizmanSuzukiEnvironment):
-    assert env.n_real_experiments > 30  # P1-L4 subset has 37 real experiments
+    assert env.n_real_experiments > 30
     assert env.n_dims == 3
     assert env.bounds.shape == (3, 2)
 
@@ -37,12 +37,13 @@ def test_evaluate_is_stochastic(env: ReizmanSuzukiEnvironment):
 
 
 def test_emulator_holdout_rmse_is_reasonable(env: ReizmanSuzukiEnvironment):
-    """Sanity bound, not a tight assertion: with 37 real points and real
-    experimental noise, some regression error is expected and fine -- this
-    just guards against something being badly broken (e.g. RMSE near 0.5,
-    which would mean the emulator learned nothing)."""
     rmse = env.emulator_holdout_rmse()
     assert 0.0 < rmse < 0.35
+
+
+def test_emulator_holdout_rmse_rejects_one_fold(env: ReizmanSuzukiEnvironment):
+    with pytest.raises(ValueError, match="at least two"):
+        env.emulator_holdout_rmse(n_splits=1)
 
 
 def test_true_optimum_within_bounds(env: ReizmanSuzukiEnvironment):
