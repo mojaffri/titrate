@@ -1,4 +1,4 @@
-"""Recruiter-facing, evidence-backed GP versus PyTorch model comparison."""
+"""Held-out comparison of the Gaussian-process and PyTorch surrogates."""
 
 from __future__ import annotations
 
@@ -150,14 +150,14 @@ def render_training_curve(comparison: ComparisonResult) -> None:
     ).set_index("epoch")
     st.line_chart(frame, color=["#7c3aed", "#f59e0b"])
     st.caption(
-        f"Early stopping restored epoch {history.best_epoch + 1}; the chart shows every epoch evaluated."
+        f"Early stopping restored epoch {history.best_epoch + 1}; the chart includes every evaluated epoch."
     )
 
 
 def render_interactive_prediction(comparison: ComparisonResult) -> None:
     env = CSTREnvironment()
     st.subheader("Try an operating condition")
-    st.caption("Both models see the same point. The simulator value is shown only for honest comparison.")
+    st.caption("Both models receive the same condition. The simulator provides the reference value.")
     columns = st.columns(3)
     values = []
     labels = ("Temperature (K)", "Residence time (hr)", "Catalyst loading (mol%)")
@@ -197,9 +197,10 @@ def render_interactive_prediction(comparison: ComparisonResult) -> None:
 
 st.title("Model Lab: Gaussian Process vs PyTorch")
 st.markdown(
-    "This lab makes the model choice inspectable. **The GP remains Titrate's default for small-data "
-    "Bayesian optimization** because its posterior uncertainty is useful with tens of experiments. "
-    "The PyTorch network is a scalable deep-learning alternative for larger datasets and production serving."
+    "This page compares both surrogates on the same train/test split. "
+    "Titrate uses the Gaussian process for small-data Bayesian optimization because its posterior "
+    "uncertainty is available directly to the acquisition function. The PyTorch model provides a "
+    "second supervised-learning baseline and exercises the inference stack."
 )
 
 with st.sidebar:
@@ -209,13 +210,14 @@ with st.sidebar:
     seed = st.number_input("Random seed", min_value=0, max_value=10_000, value=42, step=1)
     st.caption("Changing these settings retrains both models on an identical split.")
 
-with st.spinner("Training both models and measuring sample efficiency…"):
+with st.spinner("Training models and evaluating the held-out split..."):
     comparison, learning_curve = run_lab(total_samples, torch_epochs, int(seed))
 
-st.subheader("Held-out evidence")
+st.subheader("Held-out results")
 st.caption(
     "Metrics use the same untouched 20% test split. Uncertainty is the GP posterior standard deviation "
-    "or PyTorch MC-dropout standard deviation; coverage reports how often the 95% interval contains truth."
+    "or the PyTorch MC-dropout standard deviation. Coverage is the fraction of test targets inside each "
+    "model's 95% predictive interval."
 )
 render_metric_table(comparison)
 render_prediction_evidence(comparison)
@@ -229,11 +231,11 @@ with right:
 
 render_interactive_prediction(comparison)
 
-with st.expander("Methodology and interpretation"):
+with st.expander("Methodology"):
     st.markdown(
         "- A seeded Latin Hypercube design covers the CSTR operating region.\n"
-        "- The physics simulator is evaluated without measurement noise so this page isolates approximation error.\n"
-        "- Both models receive identical training rows and are scored on one untouched test set.\n"
+        "- The simulator is evaluated without measurement noise so the comparison isolates approximation error.\n"
+        "- Both models receive identical training rows and use the same held-out test set.\n"
         "- Learning-curve fits use nested training subsets and the same test set.\n"
-        "- This supervised comparison does not replace the BO benchmark: the GP is still the default acquisition model."
+        "- The BO benchmark is evaluated separately; this page measures supervised surrogate performance."
     )

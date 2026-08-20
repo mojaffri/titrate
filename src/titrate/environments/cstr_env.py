@@ -1,18 +1,12 @@
-"""The V1 experiment source: the physics CSTR simulator, wrapped as an
-ExperimentEnvironment with measurement noise added.
+"""CSTR experiment environment used by the synthetic benchmark.
 
-This is entirely simulated data -- there are no real experimental
-measurements here. The physics is real (see titrate.physics.reactor); the
-measurement noise is a modeling choice meant to mimic realistic
-experimental/analytical reproducibility (~2-3% relative error), not fit to
-any real instrument.
+All observations from this environment are simulated. The reactor equations live
+in ``titrate.physics.reactor``. Relative Gaussian measurement noise is added as a
+modeling assumption and is not fit to a specific instrument.
 
-Bounds represent real engineering constraints on the problem:
-  - temperature: material/safety ceiling on a liquid-phase reaction
-  - residence time: reactor size / throughput cost
-  - catalyst loading: catalyst cost
-  - impurity constraint: a product purity specification (not a box bound --
-    this is what makes constrained BO, not just bounded BO, relevant)
+The search domain limits temperature, residence time, and catalyst loading. The
+impurity specification is a nonlinear process constraint evaluated from the reactor
+model.
 """
 
 from __future__ import annotations

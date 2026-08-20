@@ -1,7 +1,8 @@
 import numpy as np
+import pytest
 
 from titrate.environments.cstr_env import CSTREnvironment
-from titrate.optimization.bo_loop import run_bo
+from titrate.optimization.bo_loop import maximize_acquisition, run_bo
 
 
 def test_bo_loop_runs_end_to_end_and_respects_bounds():
@@ -33,8 +34,6 @@ def test_bo_loop_is_reproducible_with_same_seed():
 
 
 def test_bo_improves_best_feasible_objective_over_bootstrap():
-    """Not a strict guarantee for any single seed, but with enough
-    iterations BO should typically improve on its own LHS bootstrap."""
     env = CSTREnvironment()
     rng = np.random.default_rng(3)
     result = run_bo(env, n_initial=5, n_iterations=10, rng=rng)
@@ -43,3 +42,30 @@ def test_bo_improves_best_feasible_objective_over_bootstrap():
     bootstrap_best = result.objectives[:5][feasible[:5]].max() if feasible[:5].any() else -np.inf
     overall_best = result.objectives[feasible].max() if feasible.any() else -np.inf
     assert overall_best >= bootstrap_best
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"n_initial": 1, "n_iterations": 1}, "n_initial"),
+        ({"n_initial": 5, "n_iterations": -1}, "n_iterations"),
+        ({"n_initial": 5, "n_iterations": 1, "xi": -0.1}, "xi"),
+        (
+            {"n_initial": 5, "n_iterations": 1, "n_acquisition_restarts": 0},
+            "n_acquisition_restarts",
+        ),
+    ],
+)
+def test_bo_loop_rejects_invalid_run_parameters(kwargs, message):
+    env = CSTREnvironment()
+    with pytest.raises(ValueError, match=message):
+        run_bo(env, rng=np.random.default_rng(0), **kwargs)
+
+
+def test_acquisition_optimizer_rejects_invalid_bounds():
+    with pytest.raises(ValueError, match="low < high"):
+        maximize_acquisition(
+            lambda x: float(-np.sum(x**2)),
+            np.array([[1.0, 1.0]]),
+            np.random.default_rng(0),
+        )

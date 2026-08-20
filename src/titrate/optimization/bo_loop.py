@@ -1,28 +1,9 @@
-"""Sequential (constrained) Bayesian optimization driver.
-
-Algorithm, at each iteration:
-  1. Fit a GP on all objective observations so far (and a second GP on
-     constraint observations, if constraint-aware).
-  2. Compute y_best: the best *feasible* observed objective. If no feasible
-     point has been observed yet, fall back to the worst observed objective
-     so the acquisition is dominated by the feasibility term (Step 3) and
-     actively searches for a feasible region rather than degenerating.
-  3. Maximize the acquisition function (constrained EI, or plain EI if
-     constraint-unaware) over the bounds via multi-start L-BFGS-B.
-  4. Query the environment at that point (adds real measurement noise),
-     append to the dataset, repeat.
-
-The first `n_initial` points come from a Latin Hypercube bootstrap (BO needs
-some data before a GP fit is meaningful).
-
-Steps 1-3 are exposed separately as `recommend_next_point` so a caller (e.g.
-the web demo) can show "here's what we'd run next and why" before actually
-spending an experiment on it.
-"""
+"""Sequential constrained Bayesian optimization driver."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 from scipy.optimize import minimize
@@ -39,25 +20,25 @@ from titrate.surrogate.gp_model import GPSurrogate
 
 @dataclass
 class BOResult:
-    X: np.ndarray  # shape (n_total, n_dims), all queried points in order
-    objectives: np.ndarray  # noisy observed objective at each point
-    constraints: np.ndarray  # noisy observed constraint value at each point
+    X: np.ndarray
+    objectives: np.ndarray
+    constraints: np.ndarray
 
 
 @dataclass
 class Recommendation:
-    x: np.ndarray  # the proposed next experiment
-    acquisition_value: float  # (constrained) EI at x -- "expected improvement"
-    y_best: float  # best feasible objective the recommendation is measured against
+    x: np.ndarray
+    acquisition_value: float
+    y_best: float
     gp_objective: GPSurrogate
-    gp_constraint: GPSurrogate | None  # None when use_constraint=False
+    gp_constraint: GPSurrogate | None
     predicted_mean: float
     predicted_std: float
     probability_feasible: float
 
 
 def maximize_acquisition(
-    acquisition_fn,
+    acquisition_fn: Callable[[np.ndarray], float],
     bounds: np.ndarray,
     rng: np.random.Generator,
     n_restarts: int = 10,
@@ -65,11 +46,31 @@ def maximize_acquisition(
     min_distance: float = 1e-3,
     n_fallback_candidates: int = 1024,
 ) -> tuple[np.ndarray, float]:
-    """Robust multi-start maximization with a finite randomized fallback."""
+    """Maximize an acquisition function with local restarts and a sampled fallback."""
+    bounds = np.asarray(bounds, dtype=float)
+    if bounds.ndim != 2 or bounds.shape[1] != 2:
+        raise ValueError("bounds must have shape (n_dims, 2)")
+    if np.any(~np.isfinite(bounds)) or np.any(bounds[:, 0] >= bounds[:, 1]):
+        raise ValueError("each bound must contain finite low < high values")
+    if n_restarts < 1:
+        raise ValueError("n_restarts must be at least 1")
+    if n_fallback_candidates < 1:
+        raise ValueError("n_fallback_candidates must be at least 1")
+    if min_distance < 0:
+        raise ValueError("min_distance cannot be negative")
+
+    observations = None if observed_X is None else np.asarray(observed_X, dtype=float)
+    if observations is not None:
+        if observations.ndim != 2 or observations.shape[1] != bounds.shape[0]:
+            raise ValueError("observed_X must have shape (n_observations, n_dims)")
+        if np.any(~np.isfinite(observations)):
+            raise ValueError("observed_X must contain only finite values")
+
     scipy_bounds = list(zip(bounds[:, 0], bounds[:, 1]))
-    best_x = None
+    best_x: np.ndarray | None = None
     best_value = -np.inf
     start_points = lhs_propose(bounds, n_restarts, rng)
+
     for x0 in start_points:
         result = minimize(
             lambda x: -acquisition_fn(x),
@@ -80,37 +81,38 @@ def maximize_acquisition(
         value = -float(result.fun) if np.isfinite(result.fun) else -np.inf
         if result.success and value > best_value:
             best_value = value
-            best_x = result.x
+            best_x = np.asarray(result.x, dtype=float)
 
+    span = np.maximum(bounds[:, 1] - bounds[:, 0], 1e-12)
     candidate_is_novel = True
-    if observed_X is not None and len(observed_X):
-        span = np.maximum(bounds[:, 1] - bounds[:, 0], 1e-12)
-        if best_x is not None:
-            candidate_is_novel = bool(
-                np.linalg.norm((best_x - np.asarray(observed_X)) / span, axis=1).min()
-                >= min_distance
-            )
+    if observations is not None and len(observations) and best_x is not None:
+        candidate_is_novel = bool(
+            np.linalg.norm((best_x - observations) / span, axis=1).min() >= min_distance
+        )
+
     if best_x is not None and candidate_is_novel:
         return np.clip(best_x, bounds[:, 0], bounds[:, 1]), best_value
 
-    # Preserve the established multi-start path when it succeeds. This broad
-    # search is only a safety net for solver failure or a near-duplicate.
     candidates = lhs_propose(bounds, n_fallback_candidates, rng)
-    if observed_X is not None and len(observed_X):
+    if observations is not None and len(observations):
         distances = np.linalg.norm(
-            (candidates[:, None, :] - np.asarray(observed_X)[None, :, :]) / span,
+            (candidates[:, None, :] - observations[None, :, :]) / span,
             axis=2,
         ).min(axis=1)
         novel = distances >= min_distance
         if novel.any():
             candidates = candidates[novel]
+
     values = np.array([acquisition_fn(x) for x in candidates], dtype=float)
     values[~np.isfinite(values)] = -np.inf
     if values.size and np.isfinite(values).any():
         index = int(np.argmax(values))
-        best_x, best_value = candidates[index], float(values[index])
+        best_x = candidates[index]
+        best_value = float(values[index])
+
     if best_x is None:
-        raise RuntimeError("Acquisition optimization produced no finite candidate.")
+        raise RuntimeError("acquisition optimization produced no finite candidate")
+
     return np.clip(best_x, bounds[:, 0], bounds[:, 1]), best_value
 
 
@@ -124,9 +126,26 @@ def recommend_next_point(
     xi: float = 0.01,
     n_acquisition_restarts: int = 10,
 ) -> Recommendation:
-    """Fit GP(s) on the current dataset and pick the next point to query,
-    without spending an experiment on it. This is the "what should I run
-    next, and why" step, reused by both run_bo and the live demo."""
+    """Fit the current surrogate models and recommend one unobserved experiment."""
+    X = np.asarray(X, dtype=float)
+    objectives = np.asarray(objectives, dtype=float)
+    constraints = np.asarray(constraints, dtype=float)
+
+    if X.ndim != 2 or X.shape[1] != env.bounds.shape[0]:
+        raise ValueError("X must have shape (n_observations, n_dims)")
+    if objectives.ndim != 1 or constraints.ndim != 1:
+        raise ValueError("objectives and constraints must be one-dimensional")
+    if len(X) != len(objectives) or len(X) != len(constraints):
+        raise ValueError("X, objectives and constraints must contain the same number of rows")
+    if len(X) < 2:
+        raise ValueError("at least two observations are required before fitting a GP")
+    if np.any(~np.isfinite(X)) or np.any(~np.isfinite(objectives)):
+        raise ValueError("X and objectives must contain only finite values")
+    if n_acquisition_restarts < 1:
+        raise ValueError("n_acquisition_restarts must be at least 1")
+    if xi < 0:
+        raise ValueError("xi cannot be negative")
+
     gp_objective = GPSurrogate(env.bounds).fit(X, objectives)
 
     feasible_mask = env.feasible_mask(constraints)
@@ -141,16 +160,26 @@ def recommend_next_point(
 
     gp_constraint = None
     if use_constraint:
+        if np.any(~np.isfinite(constraints)) and np.isfinite(env.constraint_max):
+            raise ValueError("constraints must be finite for a finite engineering constraint")
         gp_constraint = GPSurrogate(env.bounds).fit(X, constraints)
 
         def acquisition(x: np.ndarray) -> float:
             mean, std = gp_objective.predict(np.atleast_2d(x))
             c_mean, c_std = gp_constraint.predict(np.atleast_2d(x))
             value = constrained_expected_improvement(
-                mean, std, y_best, c_mean, c_std, env.constraint_max, xi,
-                maximize=maximize, constraint_operator=env.constraint_operator,
+                mean,
+                std,
+                y_best,
+                c_mean,
+                c_std,
+                env.constraint_max,
+                xi,
+                maximize=maximize,
+                constraint_operator=env.constraint_operator,
             )
             return float(value[0])
+
     else:
 
         def acquisition(x: np.ndarray) -> float:
@@ -159,15 +188,25 @@ def recommend_next_point(
             return float(value[0])
 
     x_next, acquisition_value = maximize_acquisition(
-        acquisition, env.bounds, rng, n_acquisition_restarts, observed_X=X
+        acquisition,
+        env.bounds,
+        rng,
+        n_acquisition_restarts,
+        observed_X=X,
     )
     predicted_mean, predicted_std = gp_objective.predict(np.atleast_2d(x_next))
     probability_feasible = 1.0
     if gp_constraint is not None and np.isfinite(env.constraint_max):
         c_mean, c_std = gp_constraint.predict(np.atleast_2d(x_next))
-        probability_feasible = float(probability_of_feasibility(
-            c_mean, c_std, env.constraint_max, operator=env.constraint_operator
-        )[0])
+        probability_feasible = float(
+            probability_of_feasibility(
+                c_mean,
+                c_std,
+                env.constraint_max,
+                operator=env.constraint_operator,
+            )[0]
+        )
+
     return Recommendation(
         x=x_next,
         acquisition_value=acquisition_value,
@@ -189,12 +228,28 @@ def run_bo(
     xi: float = 0.01,
     n_acquisition_restarts: int = 10,
 ) -> BOResult:
-    """Run a full BO trajectory: n_initial LHS points + n_iterations adaptive queries."""
+    """Run an LHS bootstrap followed by sequential Bayesian optimization."""
+    if n_initial < 2:
+        raise ValueError("n_initial must be at least 2")
+    if n_iterations < 0:
+        raise ValueError("n_iterations cannot be negative")
+    if n_acquisition_restarts < 1:
+        raise ValueError("n_acquisition_restarts must be at least 1")
+    if xi < 0:
+        raise ValueError("xi cannot be negative")
+
     X, objectives, constraints = _bootstrap(env, n_initial, rng)
 
     for _ in range(n_iterations):
         recommendation = recommend_next_point(
-            env, X, objectives, constraints, rng, use_constraint, xi, n_acquisition_restarts
+            env,
+            X,
+            objectives,
+            constraints,
+            rng,
+            use_constraint,
+            xi,
+            n_acquisition_restarts,
         )
         result = env.evaluate(recommendation.x, rng)
 
@@ -206,7 +261,9 @@ def run_bo(
 
 
 def _bootstrap(
-    env: ExperimentEnvironment, n_initial: int, rng: np.random.Generator
+    env: ExperimentEnvironment,
+    n_initial: int,
+    rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     X = lhs_propose(env.bounds, n_initial, rng)
     objectives = np.empty(n_initial)
