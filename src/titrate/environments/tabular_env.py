@@ -1,19 +1,8 @@
-"""A generic ExperimentEnvironment backed by a GP emulator fit on any
-tabular dataset: pick numeric input columns, an objective column to
-maximize, and (optionally) a constraint column with a threshold.
+"""Gaussian-process environment for tabular experimental data.
 
-This is the piece that makes "bring your own data" possible -- the exact
-same optimization/benchmark code that runs on the CSTR simulator
-(titrate/physics/) and the Reizman Suzuki dataset (reizman_suzuki_env.py,
-which is a thin wrapper around this class) runs unmodified on whatever
-table a user hands it, because they all implement ExperimentEnvironment.
-
-Unlike the CSTR/Reizman environments, objective values here are NOT forced
-into a [0, 1] "yield fraction" -- an arbitrary uploaded column has no such
-guarantee, so values stay in their native units. Acquisition functions
-(Expected Improvement, probability of feasibility) only compare relative
-magnitudes, so this doesn't affect the optimization itself, only display
-formatting (handled by the caller).
+Numeric input columns define the search space. One numeric column supplies the
+objective, and an optional numeric column can define a threshold constraint. Objective
+values remain in their source units unless a subclass requests clipping.
 """
 
 from __future__ import annotations
@@ -88,9 +77,7 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
         return EvaluationResult(objective=self._clip(mean[0]), constraint_value=self._predict_constraint(x))
 
     def evaluate(self, x: np.ndarray, rng: np.random.Generator) -> EvaluationResult:
-        """Sample from the emulator's own predictive distribution -- its
-        posterior std at x is a principled noise estimate (higher where the
-        real data was sparser), rather than an arbitrary assumed noise level."""
+        """Sample one outcome from the emulator predictive distribution."""
         mean, std = self._emulator.predict(np.atleast_2d(x))
         sample = float(rng.normal(mean[0], std[0]))
         return EvaluationResult(objective=self._clip(sample), constraint_value=self._predict_constraint(x))
@@ -102,10 +89,10 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
         return float(mean[0])
 
     def emulator_holdout_rmse(self, n_splits: int = 5, random_state: int = 0) -> float:
-        """K-fold cross-validated RMSE of the emulator against the real
-        measurements it was fit on -- the honest accuracy check for a
-        benchmark built on a fitted proxy rather than a closed-form model."""
+        """Return K-fold RMSE of emulator predictions against measured rows."""
         n_splits = min(n_splits, len(self._X_train))
+        if n_splits < 2:
+            raise ValueError("n_splits must allow at least two cross-validation folds")
         kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
         squared_errors = []
         for train_idx, test_idx in kfold.split(self._X_train):
@@ -117,7 +104,7 @@ class TabularEmulatorEnvironment(ExperimentEnvironment):
         return float(np.sqrt(np.mean(squared_errors)))
 
     def emulator_cross_validation(self, n_splits: int = 5, random_state: int = 0) -> dict[str, float]:
-        """Cross-validated diagnostics; these quantify emulator fit, not lab noise."""
+        """Return cross-validated emulator fit diagnostics."""
         n_splits = min(n_splits, len(self._X_train))
         if n_splits < 2:
             return {"rmse": float("nan"), "mae": float("nan"), "r2": float("nan")}
