@@ -1,0 +1,179 @@
+:root {
+    --tt-navy: #0A2A55;
+    --tt-ink: #12243A;
+    --tt-teal: #0F8F8B;
+    --tt-amber: #D98A16;
+    --tt-muted: #607181;
+    --tt-line: #D7E1E8;
+}
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at 85% 0%, rgba(15, 143, 139, 0.09), transparent 30rem),
+        linear-gradient(180deg, #F9FBFC 0%, #F2F6F8 100%);
+    color: var(--tt-ink);
+}
+
+[data-testid="stHeader"] { background: transparent; }
+
+.block-container {
+    max-width: 1440px;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
+
+[data-testid="stSidebar"] {
+    background: #092744;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-testid="stSidebar"] * { color: #ECF3F7; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #AFC3D0; }
+[data-testid="stSidebar"] hr { border-color: rgba(255, 255, 255, 0.13); }
+
+.tt-hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--tt-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 18px 55px rgba(10, 42, 85, 0.09);
+    padding: 1.75rem 2rem;
+    margin-bottom: 1.35rem;
+}
+
+.tt-hero::after {
+    content: "";
+    position: absolute;
+    width: 340px;
+    height: 340px;
+    right: -160px;
+    top: -210px;
+    border: 46px solid rgba(15, 143, 139, 0.08);
+    border-radius: 50%;
+}
+
+.tt-hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: center;
+    gap: 1.3rem;
+}
+
+.tt-logo-wrap {
+    display: grid;
+    place-items: center;
+    width: 84px;
+    height: 84px;
+    border: 1px solid #CBD9E2;
+    border-radius: 20px;
+    background: #F7FAFC;
+    box-shadow: 0 9px 24px rgba(10, 42, 85, 0.12);
+}
+
+.tt-logo-wrap img { width: 66px; height: 66px; }
+
+.tt-eyebrow {
+    color: var(--tt-teal);
+    font-size: 0.72rem;
+    font-weight: 760;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+}
+
+.tt-hero h1 {
+    color: var(--tt-ink);
+    font-size: clamp(2.25rem, 5vw, 4.1rem);
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    margin: 0;
+}
+
+.tt-hero p {
+    max-width: 850px;
+    color: var(--tt-muted);
+    font-size: 1.02rem;
+    line-height: 1.62;
+    margin: 0.85rem 0 1rem;
+}
+
+.tt-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.tt-tag {
+    padding: 0.36rem 0.7rem;
+    border: 1px solid #C8D9DD;
+    border-radius: 999px;
+    background: #F2F9F8;
+    color: #275C60;
+    font-size: 0.75rem;
+    font-weight: 680;
+}
+
+.tt-section {
+    color: var(--tt-ink);
+    font-size: 0.74rem;
+    font-weight: 760;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 1.4rem 0 0.62rem;
+}
+
+[data-testid="stMetric"] {
+    min-height: 116px;
+    border: 1px solid var(--tt-line);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 24px rgba(10, 42, 85, 0.045);
+    padding: 0.95rem 1rem;
+}
+
+[data-testid="stMetricLabel"] p {
+    color: #637482;
+    font-size: 0.72rem;
+    font-weight: 720;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+}
+
+[data-testid="stMetricValue"] { color: var(--tt-ink); }
+
+[data-baseweb="tab-list"] {
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--tt-line);
+}
+
+[data-baseweb="tab"] {
+    height: 3.35rem;
+    padding-left: 0;
+    padding-right: 0;
+    color: #667784;
+    font-weight: 650;
+}
+
+[aria-selected="true"][data-baseweb="tab"] { color: var(--tt-teal); }
+
+[data-testid="stDataFrame"], [data-testid="stVegaLiteChart"], [data-testid="stImage"] {
+    border: 1px solid var(--tt-line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #FFFFFF;
+}
+
+.stButton > button, .stDownloadButton > button {
+    min-height: 2.75rem;
+    border-radius: 9px;
+    font-weight: 700;
+}
+
+div[data-testid="stAlert"] { border-radius: 11px; }
+
+@media (max-width: 700px) {
+    .block-container { padding-top: 1rem; }
+    .tt-hero { padding: 1.35rem 1.15rem; border-radius: 14px; }
+    .tt-hero-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+    .tt-logo-wrap { width: 68px; height: 68px; border-radius: 16px; }
+    .tt-logo-wrap img { width: 52px; height: 52px; }
+    .tt-hero p { font-size: 0.95rem; }
+}

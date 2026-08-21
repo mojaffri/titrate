@@ -1,7 +1,8 @@
-"""Recruiter-facing, evidence-backed GP versus PyTorch model comparison."""
+"""Held-out GP versus PyTorch model comparison."""
 
 from __future__ import annotations
 
+import base64
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 LOGO_PATH = REPO_ROOT / "assets" / "titrate-logo.png"
+LOGO_DATA_URI = "data:image/png;base64," + base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+STYLE_PATH = REPO_ROOT / "webapp" / "styles.css"
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -25,7 +28,13 @@ from titrate.evaluation.model_comparison import (  # noqa: E402
     held_out_split,
 )
 
-st.set_page_config(page_title="Titrate Model Lab", page_icon=str(LOGO_PATH), layout="wide")
+st.set_page_config(
+    page_title="Titrate | Model evidence lab",
+    page_icon=str(LOGO_PATH),
+    layout="wide",
+    initial_sidebar_state="auto",
+)
+st.markdown(f"<style>{STYLE_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
@@ -195,11 +204,36 @@ def render_interactive_prediction(comparison: ComparisonResult) -> None:
         st.success(f"This point is feasible: impurity = {truth.constraint_value:.4f} mol/L.")
 
 
-st.title("Model Lab: Gaussian Process vs PyTorch")
 st.markdown(
-    "This lab makes the model choice inspectable. **The GP remains Titrate's default for small-data "
-    "Bayesian optimization** because its posterior uncertainty is useful with tens of experiments. "
-    "The PyTorch network is a scalable deep-learning alternative for larger datasets and production serving."
+    f"""
+    <section class="tt-hero">
+        <div class="tt-hero-grid">
+            <div class="tt-logo-wrap">
+                <img src="{LOGO_DATA_URI}" alt="Titrate logo">
+            </div>
+            <div>
+                <div class="tt-eyebrow">Held-out surrogate evaluation</div>
+                <h1>Model evidence lab</h1>
+                <p>
+                    Compare a Gaussian process and a PyTorch MLP on identical observations
+                    and one untouched test split. Metrics, uncertainty intervals, learning
+                    curves, and predictions remain visible side by side.
+                </p>
+                <div class="tt-tags">
+                    <span class="tt-tag">Shared held-out split</span>
+                    <span class="tt-tag">GP posterior</span>
+                    <span class="tt-tag">MC dropout</span>
+                    <span class="tt-tag">Learning curves</span>
+                </div>
+            </div>
+        </div>
+    </section>
+    """,
+    unsafe_allow_html=True,
+)
+st.caption(
+    "The GP remains Titrate's small-data BO default; the PyTorch path is evaluated as a "
+    "larger-data surrogate and serving alternative."
 )
 
 with st.sidebar:
@@ -212,7 +246,7 @@ with st.sidebar:
 with st.spinner("Training both models and measuring sample efficiency…"):
     comparison, learning_curve = run_lab(total_samples, torch_epochs, int(seed))
 
-st.subheader("Held-out evidence")
+st.markdown('<div class="tt-section">Held-out evidence</div>', unsafe_allow_html=True)
 st.caption(
     "Metrics use the same untouched 20% test split. Uncertainty is the GP posterior standard deviation "
     "or PyTorch MC-dropout standard deviation; coverage reports how often the 95% interval contains truth."

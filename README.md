@@ -8,13 +8,22 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Constrained Bayesian optimization for chemical process design — how many experiments does it actually take to find a near-optimal reaction condition?**
+Constrained Bayesian optimization for chemical process design, evaluated by the number
+of experiments required to reach a near-optimal feasible condition.
 
-**[🔗 Live demo — titrate.streamlit.app](https://titrate.streamlit.app/)** — run constrained BO or open the Model Lab for a held-out GP vs PyTorch comparison with uncertainty, learning curves, and interactive predictions. See [§14](#14-demo).
+**[Open the live optimizer](https://titrate.streamlit.app/)** · Run constrained BO or
+open the Model Lab for a held-out GP/PyTorch comparison with uncertainty, learning curves,
+and interactive predictions.
 
-Titrate is an open-source benchmark and optimization engine for the small-data experiment-design problem at the core of AI-native chemistry/process-R&D companies: given a limited number of experiments, which condition should you run next to reach the best (feasible) outcome as fast as possible? It implements Gaussian-process-based constrained Bayesian optimization from scratch on top of a physically grounded chemical reactor model, and rigorously benchmarks it against random search, grid search, and Latin Hypercube Sampling across 40 random seeds — then validates the same method on a real published chemistry dataset (see [§9](#9-real-data-validation)).
+Titrate is a benchmark and optimization engine for small-data experiment design: given
+a limited budget, which condition should be run next to improve the best feasible outcome?
+It implements Gaussian-process constrained Bayesian optimization on a chemical reactor
+model, compares it with four baselines across 40 random seeds, and evaluates the same
+interface on a published chemistry dataset.
 
-**Headline result:** on a constrained CSTR yield-optimization problem with a genuine interior optimum, constrained BO reaches 95% of the true optimal yield in a median of **8 experiments**, versus **14 for random search** and **10 for Latin Hypercube Sampling** — while also violating the process's purity constraint less often than any other strategy tested.
+On the constrained CSTR benchmark, constrained BO reaches 95% of the known optimum in a
+median of **8 experiments**, versus **14 for random search** and **10 for Latin Hypercube
+Sampling**. Its constraint-violation rate is also the lowest of the five tested strategies.
 
 ![Sample efficiency convergence](results/convergence.png)
 
@@ -22,25 +31,28 @@ Titrate is an open-source benchmark and optimization engine for the small-data e
 
 > **Data:** the primary benchmark above uses a physics-based CSTR simulator — clearly labeled as simulated throughout. [§9](#9-real-data-validation) then re-runs the same method on 96 real published Suzuki-Miyaura reaction measurements. See [§10](#10-data) for exactly what "simulated" means and why, and [§9](#9-real-data-validation) for the real-data provenance.
 
-### Engineering scope
+### Repository scope
 
 | Layer | Evidence in this repository |
 |---|---|
 | Chemical engineering | Arrhenius kinetics, CSTR mass balances, selectivity and nonlinear purity constraints |
 | Scientific ML | GP uncertainty, PyTorch MC dropout, held-out evaluation, calibration and learning curves |
 | Optimization | From-scratch expected improvement, feasibility-aware acquisition and multi-seed baselines |
-| Product engineering | Interactive Streamlit optimizer and recruiter-facing Model Lab |
+| Product engineering | Interactive Streamlit optimizer and held-out Model Lab |
 | Backend and MLOps | Validated FastAPI inference, versioned artifacts, MLflow support, drift and Prometheus metrics |
 | Delivery and cloud | Non-root Docker, integration tests, GitHub Actions, AWS OIDC, ECR, App Runner and CloudFormation |
 | Security and cost control | Least-scope deploy role, infrastructure scanning, immutable images, capped scaling, budget alerts and guarded teardown |
 
 ---
 
-## Why this is relevant to industry
+## Where the formulation applies
 
-- **Reaction optimization:** the exact loop AI-native process-chemistry startups build — small amounts of HTE/flow data, a surrogate with calibrated uncertainty, and a policy for the next experiment — applied here to a real reaction-condition search problem, not a toy function.
-- **Materials & formulation R&D:** the same constrained-BO machinery (GP surrogate + feasibility-aware acquisition) applies directly to composition/formulation search under cost or safety limits, a near-identical mathematical structure to what's implemented here.
-- **Process-development experiment planning:** the core question — *which condition should we run next, and how many runs until we're confident we're near-optimal* — is the standard planning question in scale-up and process development, answered here quantitatively rather than by intuition.
+- **Reaction conditions:** small flow or high-throughput datasets with yield objectives
+  and purity, safety, or operating constraints.
+- **Materials and formulation studies:** composition searches with feasibility-aware
+  acquisition under cost or performance limits.
+- **Process-development planning:** sequential selection of the next condition when
+  experimental time and material budgets are limited.
 
 ---
 
@@ -73,7 +85,10 @@ Each "experiment" is expensive (time, material, instrument access), so the quest
 
 ## 2. Why it matters
 
-This is the core technical loop behind AI-native chemistry and process-R&D startups (autonomous experimentation / self-driving-lab platforms, reaction-condition optimization tools, materials-discovery pipelines): small amounts of experimental data, a surrogate model with calibrated uncertainty, and a policy for choosing the next experiment under real engineering constraints. Titrate builds that loop end-to-end — physics, surrogate, acquisition, constraints, benchmark — rather than any one piece of it in isolation.
+Sequential experiment-design systems combine small experimental datasets, a surrogate
+with calibrated uncertainty, and a policy for choosing the next condition under
+engineering constraints. Titrate keeps that loop inspectable end to end: physics,
+surrogate, acquisition, constraints, and benchmark.
 
 ## 3. ChemE formulation
 

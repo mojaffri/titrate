@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 LOGO_PATH = REPO_ROOT / "assets" / "titrate-logo.png"
 LOGO_DATA_URI = "data:image/png;base64," + base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+STYLE_PATH = REPO_ROOT / "webapp" / "styles.css"
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -40,7 +41,13 @@ from titrate.environments.tabular_env import TabularEmulatorEnvironment  # noqa:
 from titrate.environments.validation import validate_experiment_table  # noqa: E402
 from titrate.optimization.bo_loop import recommend_next_point  # noqa: E402
 
-st.set_page_config(page_title="Titrate", page_icon=str(LOGO_PATH), layout="wide")
+st.set_page_config(
+    page_title="Titrate | Constrained experiment design",
+    page_icon=str(LOGO_PATH),
+    layout="wide",
+    initial_sidebar_state="auto",
+)
+st.markdown(f"<style>{STYLE_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 N_INITIAL = 5
 MIN_UPLOAD_ROWS = 8
@@ -100,6 +107,10 @@ def fmt_magnitude(display: DisplayConfig, value: float) -> str:
 
 def fmt_delta(display: DisplayConfig, value: float) -> str:
     return f"+{fmt_magnitude(display, value)}"
+
+
+def section_label(text: str) -> None:
+    st.markdown(f'<div class="tt-section">{text}</div>', unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------
@@ -354,22 +365,32 @@ def run_recommended_experiment(env: ExperimentEnvironment, x_next: np.ndarray) -
 
 
 def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -> None:
-    logo_col, title_col = st.columns([1, 10])
-    logo_col.markdown(
-        '<div style="width:72px;height:72px;border-radius:18px;background:#f8fafc;'
-        'border:1px solid rgba(148,163,184,.35);display:flex;align-items:center;'
-        'justify-content:center;box-shadow:0 6px 18px rgba(15,23,42,.16)">'
-        f'<img src="{LOGO_DATA_URI}" alt="Titrate logo" width="58" height="58">'
-        '</div>',
+    st.markdown(
+        f"""
+        <section class="tt-hero">
+            <div class="tt-hero-grid">
+                <div class="tt-logo-wrap">
+                    <img src="{LOGO_DATA_URI}" alt="Titrate logo">
+                </div>
+                <div>
+                    <div class="tt-eyebrow">Sequential experiment design · interactive optimizer</div>
+                    <h1>Titrate</h1>
+                    <p>
+                        Constrained Bayesian optimization for chemical process conditions.
+                        Compare data sources, adjust engineering limits, and inspect how each
+                        uncertainty-aware recommendation is formed.
+                    </p>
+                    <div class="tt-tags">
+                        <span class="tt-tag">Constrained expected improvement</span>
+                        <span class="tt-tag">40-seed benchmark</span>
+                        <span class="tt-tag">Published chemistry dataset</span>
+                        <span class="tt-tag">Reproducible runs</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        """,
         unsafe_allow_html=True,
-    )
-    title_col.title("Titrate")
-    st.markdown("### Reach better experimental conditions with fewer runs")
-    st.caption(
-        "Constrained Bayesian optimization for chemical process design — interactive: swap data sources, "
-        "adjust constraints, or upload your own CSV in the sidebar. "
-        "Choose a process, learn from completed experiments, and repeat an uncertainty-aware recommendation. "
-        "See the [GitHub repo](https://github.com/mojaffri/titrate) for multi-seed benchmarks and methodology."
     )
 
     X, objectives, constraints = st.session_state.X, st.session_state.objectives, st.session_state.constraints
@@ -379,6 +400,7 @@ def render_header(env: ExperimentEnvironment, optimum, display: DisplayConfig) -
     else:
         best = float("nan")
 
+    section_label("Optimization state")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(f"Current best {display.value_name.lower()} (observed)", fmt_value(display, best))
     col2.metric("Experiments performed", f"{len(X)}")
@@ -417,7 +439,7 @@ def render_recommendation(env: ExperimentEnvironment, display: DisplayConfig, se
         n_acquisition_restarts=settings.acquisition_restarts,
     )
 
-    st.subheader("Recommended next experiment")
+    section_label("Recommended next experiment")
     cols = st.columns(env.n_dims + 2)
     for col, dim_name, value in zip(cols, env.dimension_names, recommendation.x):
         col.metric(pretty_dim_name(dim_name), f"{value:.3g}")
@@ -437,7 +459,7 @@ def render_recommendation(env: ExperimentEnvironment, display: DisplayConfig, se
             "uncertainty; it is not claimed to be laboratory measurement error."
         )
 
-    if st.button("▶ Run this experiment", type="primary"):
+    if st.button("Run recommended experiment", type="primary"):
         run_recommended_experiment(env, recommendation.x)
         st.rerun()
 
@@ -611,7 +633,7 @@ def main() -> None:
     render_header(env, optimum, display)
     render_constraints(env)
 
-    if st.button("↺ Reset session"):
+    if st.button("Reset session"):
         for key in ("env_key", "rng", "X", "objectives", "constraints"):
             st.session_state.pop(key, None)
         st.rerun()

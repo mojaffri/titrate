@@ -8,6 +8,6 @@ def test_model_lab_renders_metrics_and_interactive_predictions() -> None:
     app = AppTest.from_file(str(page), default_timeout=120).run()
 
     assert not app.exception
-    assert [title.value for title in app.title] == ["Model Lab: Gaussian Process vs PyTorch"]
+    assert any("Model evidence lab" in markdown.value for markdown in app.markdown)
     assert len(app.dataframe) >= 2
     assert len(app.slider) >= 5
